@@ -39,3 +39,4 @@ Empfohlener Migrations-Commit nach unabhängiger Diff-Prüfung: `refactor(toolki
 - `7631865` — Root-Workspace, Shared-Paket, Python-Toolchain, CI und Security-Grundlagen.
 - `e427378` — Medienvalidierung des ersten und letzten Videoframes.
 - `074f844` — Ruff-konforme Formatierung des Medienvalidators.
+- `4b5a616` — finaler Handoff-Nachweis und Commit-Dokumentation.
