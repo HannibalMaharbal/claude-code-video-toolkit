@@ -36,8 +36,11 @@ Empfohlener Migrations-Commit nach unabhängiger Diff-Prüfung: `refactor(toolki
 
 ## Lokale Commits
 
+Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentationsnachtrag `aa2ccbd`).
+
 - `7631865` — Root-Workspace, Shared-Paket, Python-Toolchain, CI und Security-Grundlagen.
 - `e427378` — Medienvalidierung des ersten und letzten Videoframes.
 - `074f844` — Ruff-konforme Formatierung des Medienvalidators.
 - `4b5a616` — finaler Handoff-Nachweis und Commit-Dokumentation.
 - `633a979` — kontrollierter CI-Medien-Smoke mit Timeout und Validator.
+- `aa2ccbd` — Staging-, Rollback- und GitHub-Schutzkonfiguration dokumentiert.
