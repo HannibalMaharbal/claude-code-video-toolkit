@@ -40,3 +40,4 @@ Empfohlener Migrations-Commit nach unabhängiger Diff-Prüfung: `refactor(toolki
 - `e427378` — Medienvalidierung des ersten und letzten Videoframes.
 - `074f844` — Ruff-konforme Formatierung des Medienvalidators.
 - `4b5a616` — finaler Handoff-Nachweis und Commit-Dokumentation.
+- `633a979` — kontrollierter CI-Medien-Smoke mit Timeout und Validator.
