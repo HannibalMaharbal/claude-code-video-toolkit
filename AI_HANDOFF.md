@@ -44,3 +44,4 @@ Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentatio
 - `4b5a616` — finaler Handoff-Nachweis und Commit-Dokumentation.
 - `633a979` — kontrollierter CI-Medien-Smoke mit Timeout und Validator.
 - `aa2ccbd` — Staging-, Rollback- und GitHub-Schutzkonfiguration dokumentiert.
+- `4ed12fe` — Dependency-Review-Gate mit vollständigem SHA ergänzt.
