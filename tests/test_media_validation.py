@@ -60,7 +60,7 @@ def test_video_metadata_and_decode(monkeypatch: pytest.MonkeyPatch) -> None:
             }
         ],
     }
-    results = iter([completed(json.dumps(probe)), completed()])
+    results = iter([completed(json.dumps(probe)), completed(), completed(), completed()])
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: next(results))
     report = validate_video(Path("sample.mp4"))
     assert report.details == {

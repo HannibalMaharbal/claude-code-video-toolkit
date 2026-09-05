@@ -125,6 +125,8 @@ def validate_video(path: Path) -> MediaReport:
     if width <= 0 or height <= 0 or frame_rate <= 0:
         raise MediaValidationError("Ungültige Auflösung oder Framerate")
     _run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-f", "null", "-"])
+    _run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"])
+    _run(["ffmpeg", "-v", "error", "-sseof", "-0.01", "-i", str(path), "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-"])
     return MediaReport(
         "video",
         _duration(probe),
