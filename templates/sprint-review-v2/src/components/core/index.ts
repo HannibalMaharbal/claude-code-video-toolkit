@@ -12,7 +12,7 @@ export {
   NarratorPiP,
   Vignette,
   FilmGrain,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';
 
 // Re-export types if needed by template code
 export type {
@@ -22,4 +22,4 @@ export type {
   LabelSize,
   VignetteProps,
   FilmGrainProps,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';

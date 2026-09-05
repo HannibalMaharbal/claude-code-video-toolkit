@@ -45,7 +45,7 @@ image = (
 
 @app.cls(
     image=image,
-    gpu="A100",
+    gpu="A10G",
     timeout=600,
     scaledown_window=60,
 )

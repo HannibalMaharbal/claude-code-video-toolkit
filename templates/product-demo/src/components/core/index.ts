@@ -9,13 +9,13 @@ export {
   AnimatedBackground,
   Vignette,
   LogoWatermark,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';
 
 export type {
   BackgroundVariant,
   VignetteProps,
   LogoWatermarkProps,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';
 
 // NarratorPiP stays local - uses different API (config object vs props)
 // TODO: Unify NarratorPiP API in lib component

@@ -492,54 +492,56 @@ def _call_modal(
 
     _emit("submit", f"{progress_label} via Modal...", level="info")
 
-    try:
-        # Modal web endpoints are synchronous — single POST, wait for result.
-        # Heartbeat thread emits liveness events during the blocking call.
-        heartbeat_ctx = (progress.heartbeat(
-            "waiting", f"{progress_label} via Modal... ({{elapsed:.0f}}s)"
-        ) if progress else contextmanager(lambda: (yield))())
+    for attempt in range(3):
+        try:
+            heartbeat_ctx = (progress.heartbeat(
+                "waiting", f"{progress_label} via Modal... ({{elapsed:.0f}}s)"
+            ) if progress else contextmanager(lambda: (yield))())
 
-        with heartbeat_ctx:
-            response = requests.post(
-                endpoint_url,
-                json=modal_payload,
-                headers=headers,
-                timeout=timeout + 30,
-            )
+            with heartbeat_ctx:
+                response = requests.post(
+                    endpoint_url,
+                    json=modal_payload,
+                    headers=headers,
+                    timeout=timeout + 30,
+                )
 
-        elapsed = time.time() - start
+            elapsed = time.time() - start
 
-        if response.status_code == 200:
-            result = response.json()
-            _emit("complete", f"Completed in {elapsed:.1f}s", pct=100,
-                   level="success")
-            return result, elapsed
+            if response.status_code == 200:
+                result = response.json()
+                _emit("complete", f"Completed in {elapsed:.1f}s", pct=100, level="success")
+                return result, elapsed
 
-        # Modal error responses
-        error_body = response.text[:500]
-        if response.status_code == 422:
-            _emit("error", f"Modal validation error: {error_body}", level="error")
-            return {"error": f"Modal validation error: {error_body}"}, elapsed
-        elif response.status_code == 408:
-            _emit("error", f"Modal function timed out after {timeout}s", level="error")
-            return {"error": f"Modal function timed out after {timeout}s"}, elapsed
-        elif response.status_code == 503:
-            _emit("error", "Modal endpoint scaling up or unavailable", level="error")
-            return {"error": "Modal endpoint is scaling up or unavailable. Try again in a moment."}, elapsed
-        else:
-            _emit("error", f"Modal HTTP {response.status_code}: {error_body}",
-                   level="error")
-            return {"error": f"Modal HTTP {response.status_code}: {error_body}"}, elapsed
+            error_body = response.text[:500]
+            if response.status_code == 503 and attempt < 2:
+                _emit("queue", f"Modal cold start, retrying in 30s (attempt {attempt + 1}/3)...", level="info")
+                time.sleep(30)
+                continue
+            elif response.status_code == 422:
+                _emit("error", f"Modal validation error: {error_body}", level="error")
+                return {"error": f"Modal validation error: {error_body}"}, elapsed
+            elif response.status_code == 408:
+                _emit("error", f"Modal function timed out after {timeout}s", level="error")
+                return {"error": f"Modal function timed out after {timeout}s"}, elapsed
+            elif response.status_code == 503:
+                _emit("error", "Modal endpoint unavailable after 3 attempts", level="error")
+                return {"error": "Modal endpoint unavailable after retries. Check modal.com."}, elapsed
+            else:
+                _emit("error", f"Modal HTTP {response.status_code}: {error_body}", level="error")
+                return {"error": f"Modal HTTP {response.status_code}: {error_body}"}, elapsed
 
-    except requests.exceptions.Timeout:
-        elapsed = time.time() - start
-        _emit("error", f"Modal request timed out after {elapsed:.0f}s", level="error")
-        return {"error": f"Modal request timed out after {elapsed:.0f}s"}, elapsed
-    except requests.exceptions.ConnectionError as e:
-        elapsed = time.time() - start
-        _emit("error", f"Modal connection failed: {e}", level="error")
-        return {"error": f"Modal connection failed (is the endpoint deployed?): {e}"}, elapsed
-    except Exception as e:
-        elapsed = time.time() - start
-        _emit("error", f"Modal request failed: {e}", level="error")
-        return {"error": f"Modal request failed: {e}"}, elapsed
+        except requests.exceptions.Timeout:
+            elapsed = time.time() - start
+            _emit("error", f"Modal request timed out after {elapsed:.0f}s", level="error")
+            return {"error": f"Modal request timed out after {elapsed:.0f}s"}, elapsed
+        except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start
+            _emit("error", f"Modal connection failed: {e}", level="error")
+            return {"error": f"Modal connection failed (is the endpoint deployed?): {e}"}, elapsed
+        except Exception as e:
+            elapsed = time.time() - start
+            _emit("error", f"Modal request failed: {e}", level="error")
+            return {"error": f"Modal request failed: {e}"}, elapsed
+
+    return {"error": "Modal: max retries exceeded"}, time.time() - start

@@ -4,7 +4,7 @@ import { sprintConfig, seconds } from './config/sprint-config';
 
 // Core components
 import { AnimatedBackground, SlideTransition, NarratorPiP } from './components/core';
-import { MazeDecoration } from '../../../lib/components';
+import { MazeDecoration } from '@video-toolkit/remotion-shared/components';
 
 // Slides
 import { TitleSlide, OverviewSlide, SummarySlide, EndCredits } from './components/slides';
@@ -45,7 +45,7 @@ export const SprintReview: React.FC = () => {
             opacity={mazeDecoration.opacity}
             scale={mazeDecoration.scale}
             primaryColor={mazeDecoration.primaryColor || defaultTheme.colors.primary}
-            secondaryColor={mazeDecoration.secondaryColor || defaultTheme.colors.backgroundDark}
+            secondaryColor={mazeDecoration.secondaryColor || defaultTheme.colors.bgDark}
           />
         )}
 

@@ -1,6 +1,6 @@
 import { AbsoluteFill, OffthreadVideo, staticFile, getStaticFiles } from 'remotion';
 import { useTheme } from '../../config/theme';
-import { Label } from '../../../../../lib/components';
+import { Label } from '@video-toolkit/remotion-shared/components';
 
 interface DemoSectionProps {
   videoFile: string;

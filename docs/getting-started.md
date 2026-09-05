@@ -47,7 +47,7 @@ No API keys needed. Edit `src/config/sprint-config.ts` to customize content.
    ```bash
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -r tools/requirements.txt
+   uv sync --frozen
    ```
 
 3. **Start Claude Code and run the setup wizard**

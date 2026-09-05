@@ -14,6 +14,7 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Sequence } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
+import type { TransitionPresentation } from '@remotion/transitions';
 import { slide } from '@remotion/transitions/slide';
 import { fade } from '@remotion/transitions/fade';
 import { wipe } from '@remotion/transitions/wipe';
@@ -106,11 +107,15 @@ const GalleryScene: React.FC<{
 };
 
 // Single transition demo segment
-const TransitionDemo: React.FC<{
+const TransitionDemo = <PresentationProps extends Record<string, unknown>>({
+  name,
+  presentation,
+  transitionDuration = 20,
+}: {
   name: string;
-  presentation: ReturnType<typeof glitch>;
+  presentation: TransitionPresentation<PresentationProps>;
   transitionDuration?: number;
-}> = ({ name, presentation, transitionDuration = 20 }) => {
+}) => {
   const sceneDuration = 45; // 1.5 seconds per scene
 
   return (
@@ -128,6 +133,23 @@ const TransitionDemo: React.FC<{
     </TransitionSeries>
   );
 };
+
+const createTransition = <PresentationProps extends Record<string, unknown>>(
+  name: string,
+  presentation: TransitionPresentation<PresentationProps>,
+  duration: number,
+) => ({
+  name,
+  presentation,
+  duration,
+  render: () => (
+    <TransitionDemo
+      name={name}
+      presentation={presentation}
+      transitionDuration={duration}
+    />
+  ),
+});
 
 // Intro slide
 const IntroSlide: React.FC = () => {
@@ -175,16 +197,16 @@ const IntroSlide: React.FC = () => {
 
 // Define all transitions to showcase
 const TRANSITIONS = [
-  { name: 'glitch()', presentation: glitch({ intensity: 0.9 }), duration: 25 },
-  { name: 'rgbSplit()', presentation: rgbSplit({ direction: 'horizontal' }), duration: 25 },
-  { name: 'zoomBlur()', presentation: zoomBlur({ direction: 'in' }), duration: 25 },
-  { name: 'lightLeak()', presentation: lightLeak({ temperature: 'warm' }), duration: 35 },
-  { name: 'clockWipe()', presentation: clockWipe({ direction: 'clockwise' }), duration: 25 },
-  { name: 'pixelate()', presentation: pixelate({ maxBlockSize: 50 }), duration: 25 },
-  { name: 'slide()', presentation: slide(), duration: 20 },
-  { name: 'fade()', presentation: fade(), duration: 25 },
-  { name: 'wipe()', presentation: wipe(), duration: 20 },
-  { name: 'flip()', presentation: flip(), duration: 25 },
+  createTransition('glitch()', glitch({ intensity: 0.9 }), 25),
+  createTransition('rgbSplit()', rgbSplit({ direction: 'horizontal' }), 25),
+  createTransition('zoomBlur()', zoomBlur({ direction: 'in' }), 25),
+  createTransition('lightLeak()', lightLeak({ temperature: 'warm' }), 35),
+  createTransition('clockWipe()', clockWipe({ direction: 'clockwise' }), 25),
+  createTransition('pixelate()', pixelate({ maxBlockSize: 50 }), 25),
+  createTransition('slide()', slide(), 20),
+  createTransition('fade()', fade(), 25),
+  createTransition('wipe()', wipe(), 20),
+  createTransition('flip()', flip(), 25),
 ];
 
 // Calculate segment duration (scene + transition + scene, minus overlap)
@@ -219,11 +241,7 @@ export const TransitionGallery: React.FC = () => {
           from={segments[i].from}
           durationInFrames={segments[i].duration}
         >
-          <TransitionDemo
-            name={t.name}
-            presentation={t.presentation}
-            transitionDuration={t.duration}
-          />
+          {t.render()}
         </Sequence>
       ))}
     </AbsoluteFill>
@@ -251,26 +269,22 @@ export const SingleTransitionPreview: React.FC<{
   if (!transition) return null;
 
   return (
-    <TransitionDemo
-      name={transitionName}
-      presentation={transition.presentation}
-      transitionDuration={transition.duration}
-    />
+    transition.render()
   );
 };
 
 // Map for programmatic access
 export const transitionMap = {
-  glitch: { presentation: glitch({ intensity: 0.9 }), duration: 25 },
-  rgbSplit: { presentation: rgbSplit({ direction: 'horizontal' }), duration: 25 },
-  zoomBlur: { presentation: zoomBlur({ direction: 'in' }), duration: 25 },
-  lightLeak: { presentation: lightLeak({ temperature: 'warm' }), duration: 35 },
-  clockWipe: { presentation: clockWipe({ direction: 'clockwise' }), duration: 25 },
-  pixelate: { presentation: pixelate({ maxBlockSize: 50 }), duration: 25 },
-  slide: { presentation: slide(), duration: 20 },
-  fade: { presentation: fade(), duration: 25 },
-  wipe: { presentation: wipe(), duration: 20 },
-  flip: { presentation: flip(), duration: 25 },
+  glitch: createTransition('glitch', glitch({ intensity: 0.9 }), 25),
+  rgbSplit: createTransition('rgbSplit', rgbSplit({ direction: 'horizontal' }), 25),
+  zoomBlur: createTransition('zoomBlur', zoomBlur({ direction: 'in' }), 25),
+  lightLeak: createTransition('lightLeak', lightLeak({ temperature: 'warm' }), 35),
+  clockWipe: createTransition('clockWipe', clockWipe({ direction: 'clockwise' }), 25),
+  pixelate: createTransition('pixelate', pixelate({ maxBlockSize: 50 }), 25),
+  slide: createTransition('slide', slide(), 20),
+  fade: createTransition('fade', fade(), 25),
+  wipe: createTransition('wipe', wipe(), 20),
+  flip: createTransition('flip', flip(), 25),
 } as const;
 
 export type TransitionName = keyof typeof transitionMap;

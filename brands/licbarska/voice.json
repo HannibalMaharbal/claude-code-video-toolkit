@@ -1,0 +1,29 @@
+{
+  "provider": "kokoro",
+  "voice": "bm_george",
+  "speed": 0.92,
+  "tone": "warm",
+
+  "elevenlabs": {
+    "voice_id": null,
+    "model": "eleven_multilingual_v2",
+    "stability": 0.65,
+    "similarity_boost": 0.80,
+    "style": 0.15,
+    "use_speaker_boost": true,
+    "language": "de"
+  },
+
+  "qwen3": {
+    "speaker": "Vivian",
+    "tone": "warm",
+    "temperature": 0.85
+  },
+
+  "music": {
+    "preset": "ambient",
+    "bpm": 80,
+    "key": "D Major",
+    "volume": 0.10
+  }
+}

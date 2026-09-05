@@ -1,0 +1,57 @@
+{
+  "name": "Licbarska",
+  "description": "Premium Finanz- und Immobilienberatung — seriös, vertrauenswürdig, elegant",
+  "version": "1.0.0",
+
+  "colors": {
+    "primary": "#C9A96E",
+    "primaryLight": "#D9BC8A",
+    "primaryDark": "#A88450",
+    "textDark": "#F5F0E8",
+    "textMedium": "#D4C5A9",
+    "textLight": "#8A7A64",
+    "bgLight": "#132040",
+    "bgDark": "#0A1628",
+    "bgOverlay": "rgba(10, 22, 40, 0.96)",
+    "accent": "#C9A96E",
+    "cream": "#F5F0E8",
+    "divider": "#1E3050",
+    "shadow": "rgba(0, 0, 0, 0.5)"
+  },
+
+  "fonts": {
+    "primary": "\"Cormorant Garamond\", \"Garamond\", Georgia, serif",
+    "secondary": "\"Montserrat\", system-ui, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, Menlo, monospace"
+  },
+
+  "spacing": {
+    "xs": 10,
+    "sm": 20,
+    "md": 32,
+    "lg": 56,
+    "xl": 96,
+    "xxl": 144
+  },
+
+  "borderRadius": {
+    "sm": 2,
+    "md": 4,
+    "lg": 8
+  },
+
+  "typography": {
+    "h1": { "size": 96, "weight": 600, "letterSpacing": 1 },
+    "h2": { "size": 76, "weight": 600, "letterSpacing": 0.5 },
+    "h3": { "size": 52, "weight": 500 },
+    "body": { "size": 40, "weight": 400 },
+    "label": { "size": 28, "weight": 600, "letterSpacing": 6 }
+  },
+
+  "style": "premium-luxury",
+  "tone": "trustworthy",
+  "industry": "finance-real-estate",
+
+  "logo": null,
+  "url": "licbarska-consult.de"
+}

@@ -1,0 +1,66 @@
+[project]
+name = "video-toolkit"
+version = "0.14.4"
+description = "Local and cloud-assisted video production toolkit"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "boto3>=1.28.0",
+  "kokoro-onnx>=0.4.0",
+  "matplotlib>=3.7",
+  "mlx-whisper>=0.4.0",
+  "modal>=1.4.0",
+  "moviepy>=2.0",
+  "pillow>=10.0",
+  "python-dotenv>=1.0.0",
+  "requests>=2.28.0",
+  "soundfile>=0.12.0",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.17.0",
+  "pytest>=8.4.0",
+  "pytest-asyncio>=1.1.0",
+  "ruff>=0.12.0",
+  "types-requests>=2.32.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+  "integration: uses multiple toolkit components",
+  "cloud: requires an external cloud provider",
+  "gpu: requires GPU or Apple Silicon ML hardware",
+  "slow: takes longer than the unit-test budget",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/orchestrator.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+  "tools/config.py",
+  "tools/input_parser.py",
+  "tools/scene_splitter.py",
+  "tools/orchestrator.py",
+  "tools/media_validation.py",
+]
+check_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true

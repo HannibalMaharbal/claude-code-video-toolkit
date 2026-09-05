@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { useTheme } from '../../config/theme';
-import { hexToRgba } from '../../../../../lib/components/utils';
+import { hexToRgba } from '@video-toolkit/remotion-shared/components/utils';
 import type { GoalContent } from '../../config/types';
 
 interface GoalSlideProps {

@@ -1,6 +1,6 @@
 {
   "name": "claude-code-video-toolkit",
-  "version": "0.14.2",
+  "version": "0.14.4",
   "description": "AI-native video production workspace for Claude Code",
   "repository": "https://github.com/digitalsamba/claude-code-video-toolkit",
   "skills": {
@@ -14,7 +14,7 @@
     },
     "remotion": {
       "path": ".claude/skills/remotion/",
-      "description": "Toolkit-specific Remotion patterns — custom transitions, shared components, conventions",
+      "description": "Toolkit-specific Remotion patterns \u2014 custom transitions, shared components, conventions",
       "status": "stable",
       "created": "2025-12-04",
       "updated": "2026-02-19"
@@ -65,21 +65,21 @@
     },
     "acestep": {
       "path": ".claude/skills/acestep/",
-      "description": "AI music generation — prompt engineering, scene presets, lyrics formatting, video production integration",
+      "description": "AI music generation \u2014 prompt engineering, scene presets, lyrics formatting, video production integration",
       "status": "beta",
       "created": "2026-03-22",
       "updated": "2026-03-22"
     },
     "ltx2": {
       "path": ".claude/skills/ltx2/",
-      "description": "AI video generation — prompting guide, parameters, video production use cases (b-roll, animated slides, portraits)",
+      "description": "AI video generation \u2014 prompting guide, parameters, video production use cases (b-roll, animated slides, portraits)",
       "status": "beta",
       "created": "2026-03-25",
       "updated": "2026-04-08"
     },
     "moviepy": {
       "path": ".claude/skills/moviepy/",
-      "description": "Python video composition with moviepy 2.x — overlaying text on LTX-2/SadTalker output, single-file build.py video projects",
+      "description": "Python video composition with moviepy 2.x \u2014 overlaying text on LTX-2/SadTalker output, single-file build.py video projects",
       "status": "beta",
       "created": "2026-04-08",
       "updated": "2026-04-08"
@@ -241,7 +241,11 @@
         "MODAL_MUSIC_GEN_ENDPOINT_URL"
       ],
       "created": "2026-03-22",
-      "updated": "2026-04-03"
+      "updated": "2026-04-03",
+      "env_vars": [
+        "ACEMUSIC_API_KEY",
+        "MODAL_MUSIC_GEN_ENDPOINT_URL"
+      ]
     },
     "sfx": {
       "path": "tools/sfx.py",
@@ -283,7 +287,10 @@
         "stock-center"
       ],
       "created": "2025-12-29",
-      "updated": "2025-12-30"
+      "updated": "2025-12-30",
+      "env_vars": [
+        "MODAL_DEWATERMARK_ENDPOINT_URL"
+      ]
     },
     "locate_watermark": {
       "path": "tools/locate_watermark.py",
@@ -365,7 +372,10 @@
       ],
       "estimatedCost": "$0.01-0.02 per image",
       "created": "2026-01-01",
-      "updated": "2026-01-05"
+      "updated": "2026-01-05",
+      "env_vars": [
+        "MODAL_IMAGE_EDIT_ENDPOINT_URL"
+      ]
     },
     "upscale": {
       "path": "tools/upscale.py",
@@ -398,7 +408,10 @@
       ],
       "estimatedCost": "$0.01-0.05 per image",
       "created": "2026-01-04",
-      "updated": "2026-01-05"
+      "updated": "2026-01-05",
+      "env_vars": [
+        "MODAL_UPSCALE_ENDPOINT_URL"
+      ]
     },
     "sadtalker": {
       "path": "tools/sadtalker.py",
@@ -435,7 +448,10 @@
       "estimatedCost": "$0.02-0.15 per video (depends on audio length)",
       "documentation": "docs/sadtalker.md",
       "created": "2026-01-11",
-      "updated": "2026-01-12"
+      "updated": "2026-01-12",
+      "env_vars": [
+        "MODAL_SADTALKER_ENDPOINT_URL"
+      ]
     },
     "qwen3_tts": {
       "path": "tools/qwen3_tts.py",
@@ -485,7 +501,10 @@
       ],
       "estimatedCost": "$0.005-0.10 per generation",
       "created": "2026-02-19",
-      "updated": "2026-02-19"
+      "updated": "2026-02-19",
+      "env_vars": [
+        "MODAL_QWEN3_TTS_ENDPOINT_URL"
+      ]
     },
     "sync_timing": {
       "path": "tools/sync_timing.py",
@@ -546,7 +565,12 @@
       ],
       "estimatedCost": "$0.01-0.03 per image",
       "created": "2026-03-14",
-      "updated": "2026-03-15"
+      "updated": "2026-03-15",
+      "env_vars": [
+        "MODAL_FLUX2_ENDPOINT_URL",
+        "RUNPOD_API_KEY",
+        "RUNPOD_FLUX2_ENDPOINT_ID"
+      ]
     },
     "ltx2": {
       "path": "tools/ltx2.py",
@@ -585,11 +609,14 @@
       ],
       "estimatedCost": "$0.20-0.25 per 5s clip",
       "created": "2026-03-25",
-      "updated": "2026-03-25"
+      "updated": "2026-03-25",
+      "env_vars": [
+        "MODAL_LTX2_ENDPOINT_URL"
+      ]
     },
     "chain_video": {
       "path": "tools/chain_video.py",
-      "description": "Chain LTX-2 clips with visual continuity — each scene uses the last frame of the previous as input",
+      "description": "Chain LTX-2 clips with visual continuity \u2014 each scene uses the last frame of the previous as input",
       "usage": "python tools/chain_video.py --scenes-dir images/ --output-dir videos/ --prompt \"Cinematic flow\"",
       "status": "beta",
       "category": "video-generation",
@@ -602,7 +629,10 @@
         ],
         "perScenePrompts": "--prompts-file scenes.json",
         "resume": "auto-skips existing clips",
-        "progress": ["json", "human"],
+        "progress": [
+          "json",
+          "human"
+        ],
         "prefix": "chain (default)"
       },
       "envVars": [
@@ -611,6 +641,28 @@
       "estimatedCost": "$0.20-0.25 per scene (delegates to ltx2)",
       "created": "2026-04-04",
       "updated": "2026-04-04"
+    },
+    "transcribe": {
+      "description": "Free audio/video transcription using mlx-whisper (Apple Silicon optimized)",
+      "path": "tools/transcribe.py",
+      "status": "stable",
+      "free": true,
+      "requires": "mlx-whisper",
+      "env_vars": []
+    },
+    "kokoro_tts": {
+      "path": "tools/kokoro_tts.py",
+      "description": "Free local TTS using Kokoro 82M \u2014 best open-source quality, runs on M4 Pro, no API key, no cold start",
+      "usage": "python tools/kokoro_tts.py --text \"Hello world\" --output hello.mp3",
+      "status": "active",
+      "category": "audio",
+      "backend": "local",
+      "env_vars": [],
+      "options": {
+        "--voice": "Voice name (default: am_michael). 28 voices: af_heart, am_michael, bm_george, etc.",
+        "--speed": "Speech speed multiplier (default: 1.0)",
+        "--list-voices": "List all 28 available voices with descriptions"
+      }
     }
   },
   "optionalComponents": {
@@ -992,7 +1044,7 @@
   "examples": {
     "hello-world": {
       "path": "examples/hello-world/",
-      "description": "Minimal 25s video — zero config, renders in 2 minutes",
+      "description": "Minimal 25s video \u2014 zero config, renders in 2 minutes",
       "template": "sprint-review",
       "complexity": "beginner",
       "created": "2026-02-24"
@@ -1013,7 +1065,7 @@
     },
     "the-space-between": {
       "path": "examples/the-space-between/",
-      "description": "AI-generated video essay — flux2 avatar, Qwen3-TTS voice, SadTalker animation",
+      "description": "AI-generated video essay \u2014 flux2 avatar, Qwen3-TTS voice, SadTalker animation",
       "template": "custom",
       "complexity": "advanced",
       "demo": "https://demos.digitalsamba.com/video/the-space-between.mp4",
@@ -1021,7 +1073,6 @@
     }
   },
   "config": {
-    "voiceId": "YOUR_VOICE_ID_HERE",
     "defaultFps": 30,
     "defaultResolution": {
       "width": 1920,
@@ -1029,6 +1080,9 @@
     },
     "projectsDir": "projects/",
     "templatesDir": "templates/",
-    "brandsDir": "brands/"
+    "brandsDir": "brands/",
+    "defaultVoiceProvider": "kokoro",
+    "defaultVoiceSpeaker": "Ryan",
+    "defaultVoiceTone": "professional"
   }
 }

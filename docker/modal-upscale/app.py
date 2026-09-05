@@ -28,16 +28,17 @@ image = (
     .pip_install(
         "torch==2.1.2",
         "torchvision==0.16.2",
-        "realesrgan>=0.3.0",
-        "basicsr>=1.4.2",
-        "facexlib>=0.3.0",
-        "gfpgan>=1.3.8",
-        "opencv-python-headless>=4.8.0",
         "numpy>=1.24.0,<2.0",
         "Pillow>=10.0.0",
+        "opencv-python-headless>=4.8.0",
         "boto3",
         "requests",
         "fastapi[standard]",
+        "setuptools",
+        "wheel",
+    )
+    .run_commands(
+        "pip install --no-build-isolation basicsr>=1.4.2 facexlib>=0.3.0 gfpgan>=1.3.8 realesrgan>=0.3.0",
     )
     .run_commands(
         "mkdir -p /app/weights",

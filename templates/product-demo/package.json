@@ -1,20 +1,28 @@
 {
   "name": "product-demo",
   "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "description": "Product demo video template for claude-code-video-toolkit",
   "scripts": {
     "studio": "remotion studio",
-    "render": "remotion render ProductDemo out/product-demo.mp4",
-    "render:preview": "remotion render ProductDemo out/preview.mp4 --scale=0.5"
+    "typecheck": "tsc --noEmit",
+    "build": "remotion bundle src/index.ts",
+    "render": "remotion render ProductDemo out/product-demo.mp4 --crf=17",
+    "render:hq": "remotion render ProductDemo out/product-demo-hq.mp4 --codec=h265 --crf=16",
+    "render:preview": "remotion render ProductDemo out/preview.mp4 --scale=0.5 --crf=23"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.425",
-    "@remotion/paths": "4.0.425",
-    "@remotion/shapes": "4.0.425",
-    "@remotion/transitions": "4.0.425",
+    "@video-toolkit/remotion-shared": "1.0.0",
+    "@remotion/cli": "4.0.520",
+    "@remotion/paths": "4.0.520",
+    "@remotion/shapes": "4.0.520",
+    "@remotion/transitions": "4.0.520",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "4.0.425"
+    "remotion": "4.0.520"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

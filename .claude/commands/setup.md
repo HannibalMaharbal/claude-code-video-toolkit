@@ -80,7 +80,7 @@ Check and report. Don't install anything automatically — just tell the user wh
 ### Recommended
 
 - **Python 3.9+**: `python3 --version`. If missing: "Install from https://python.org/ — needed for AI voiceover, image editing, and all cloud GPU tools"
-- **pip packages**: `python3 -c "import dotenv; import requests"`. If missing: guide through `pip install -r tools/requirements.txt` (or venv setup)
+- **Python packages**: `uv run python -c "import dotenv; import requests"`. If missing: run `uv sync --frozen` from the toolkit root.
 - **FFmpeg**: `ffmpeg -version`. If missing: "Install with `brew install ffmpeg` (macOS) or see https://ffmpeg.org/ — needed for media conversion"
 
 ### Output

@@ -1,18 +1,25 @@
 {
-  "voiceId": "YOUR_VOICE_ID_HERE",
-  "description": "Replace with your ElevenLabs voice ID",
-  "settings": {
-    "stability": 0.75,
-    "similarityBoost": 0.9,
-    "style": 0.2,
-    "useSpeakerBoost": true
+  "provider": "kokoro",
+  "description": "Default voice: Kokoro TTS (free, local, best quality). Fallback: Qwen3-TTS (Modal). Premium: ElevenLabs.",
+  "kokoro": {
+    "voice": "am_michael",
+    "speed": 1.0
   },
-  "model": "eleven_multilingual_v2",
   "qwen3": {
     "speaker": "Ryan",
     "language": "Auto",
-    "tone": "",
+    "tone": "professional",
     "instruct": "",
     "clone": null
+  },
+  "elevenlabs": {
+    "voiceId": "",
+    "model": "eleven_multilingual_v2",
+    "settings": {
+      "stability": 0.85,
+      "similarityBoost": 0.95,
+      "style": 0.0,
+      "useSpeakerBoost": true
+    }
   }
 }

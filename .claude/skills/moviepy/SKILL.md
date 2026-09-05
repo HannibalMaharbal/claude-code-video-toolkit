@@ -26,7 +26,7 @@ Two runnable references for everything in this skill live in `examples/`:
 
 Both run with `python3 build.py` and produce a real `out.mp4` immediately. Read them alongside this skill — every pattern below is shown working there.
 
-**Dependencies.** `moviepy`, `Pillow`, and `matplotlib` are declared in `tools/requirements.txt` and installed with the toolkit's one-line Python setup: `python3 -m pip install -r tools/requirements.txt`. If you hit `Missing dependency` when running an example, run that command from the repo root — the examples' `build.py` files will tell you the same thing in their error message and exit cleanly rather than printing a bare traceback.
+**Dependencies.** `moviepy`, `Pillow`, and `matplotlib` are declared in `pyproject.toml`, locked in `uv.lock`, and installed with `uv sync --frozen`. If you hit `Missing dependency` when running an example, run that command from the repository root.
 
 ## The main use case: text on AI-generated video
 

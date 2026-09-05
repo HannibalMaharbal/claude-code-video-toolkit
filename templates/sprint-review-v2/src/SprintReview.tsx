@@ -8,7 +8,7 @@ import { resolveTransition } from './config/transitions';
 
 // Core components
 import { AnimatedBackground, NarratorPiP, Vignette, FilmGrain } from './components/core';
-import { MazeDecoration } from '../../../lib/components';
+import { MazeDecoration } from '@video-toolkit/remotion-shared/components';
 
 // Scene renderer
 import { SceneRenderer } from './components/SceneRenderer';

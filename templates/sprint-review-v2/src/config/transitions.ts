@@ -9,10 +9,10 @@ import { linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
 import { slide } from '@remotion/transitions/slide';
 import { wipe } from '@remotion/transitions/wipe';
-import { lightLeak } from '../../../../lib/transitions/presentations/light-leak';
-import { glitch } from '../../../../lib/transitions/presentations/glitch';
-import { rgbSplit } from '../../../../lib/transitions/presentations/rgb-split';
-import { zoomBlur } from '../../../../lib/transitions/presentations/zoom-blur';
+import { lightLeak } from '@video-toolkit/remotion-shared/transitions/presentations/light-leak';
+import { glitch } from '@video-toolkit/remotion-shared/transitions/presentations/glitch';
+import { rgbSplit } from '@video-toolkit/remotion-shared/transitions/presentations/rgb-split';
+import { zoomBlur } from '@video-toolkit/remotion-shared/transitions/presentations/zoom-blur';
 import type { TransitionPresentation } from '@remotion/transitions';
 import type { SceneConfig, SceneType, TransitionPreset } from './types';
 

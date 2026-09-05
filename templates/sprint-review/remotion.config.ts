@@ -1,8 +1,10 @@
 import { Config } from '@remotion/cli/config';
 import path from 'path';
 
-Config.setVideoImageFormat('jpeg');
+Config.setVideoImageFormat('png');
 Config.setOverwriteOutput(true);
+Config.setChromiumOpenGlRenderer('angle');
+Config.setOffthreadVideoCacheSizeInBytes(1024 * 1024 * 512);
 
 // Ensure shared lib/ imports resolve packages from this project's node_modules
 Config.overrideWebpackConfig((config) => {

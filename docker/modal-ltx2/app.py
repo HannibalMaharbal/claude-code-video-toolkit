@@ -210,20 +210,25 @@ class LTX2:
         # Video parameters
         width = request.get("width", 768)
         height = request.get("height", 512)
-        num_frames = request.get("num_frames", 121)
         fps = request.get("fps", 24)
-        num_inference_steps = request.get("num_inference_steps", 30)
+        num_inference_steps = request.get("num_inference_steps", request.get("steps", 30))
         seed = request.get("seed")
         quality = request.get("quality", "standard")
         r2_config = request.get("r2")
 
-        # Enforce dimension constraints
+        # duration (seconds) → num_frames, with (n-1) % 8 == 0 constraint
+        if "duration" in request:
+            raw = int(round(request["duration"] * fps))
+            num_frames = (raw // 8) * 8 + 1
+        else:
+            num_frames = request.get("num_frames", 121)
+
+        # Enforce dimension constraints (must be multiples of 64)
         width = (width // 64) * 64
         height = (height // 64) * 64
 
         # Enforce frame count constraint: (num_frames - 1) % 8 == 0
         if (num_frames - 1) % 8 != 0:
-            # Round to nearest valid frame count
             num_frames = ((num_frames - 1 + 4) // 8) * 8 + 1
 
         if seed is None:

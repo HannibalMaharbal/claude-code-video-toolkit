@@ -1166,8 +1166,8 @@ Examples:
 
     # Musical control
     music_group = parser.add_argument_group("Musical Control")
-    music_group.add_argument("--duration", "-d", type=int, default=30,
-                             help="Duration in seconds (10-600, default: 30)")
+    music_group.add_argument("--duration", "-d", type=int, default=60,
+                             help="Duration in seconds (10-600, default: 60)")
     music_group.add_argument("--bpm", type=int, help="Tempo in BPM (30-300)")
     music_group.add_argument("--key", dest="key_scale", help="Musical key (e.g., 'C Major', 'Am', 'F# minor')")
     music_group.add_argument("--time-sig", type=int, choices=[2, 3, 4, 6],

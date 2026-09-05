@@ -6,5 +6,5 @@
  */
 
 export { DemoSection } from './DemoSection';
-export { SplitScreen } from '../../../../../lib/components';
-export type { SplitScreenProps } from '../../../../../lib/components';
+export { SplitScreen } from '@video-toolkit/remotion-shared/components';
+export type { SplitScreenProps } from '@video-toolkit/remotion-shared/components';

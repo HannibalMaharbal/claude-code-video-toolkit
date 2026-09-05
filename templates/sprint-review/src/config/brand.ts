@@ -9,7 +9,7 @@
  * 2. Manually copy values from brands/{brand-name}/brand.json
  */
 
-import type { Theme } from '../../../../lib/theme';
+import type { Theme } from '@video-toolkit/remotion-shared/theme';
 
 // Project brand name (for reference)
 export const brandName = 'default';

@@ -13,7 +13,7 @@ An AI-native video production workspace for [Claude Code](https://claude.ai/code
 ```bash
 git clone https://github.com/digitalsamba/claude-code-video-toolkit.git
 cd claude-code-video-toolkit
-python3 -m pip install -r tools/requirements.txt   # Optional: AI voiceover, image gen, music, moviepy examples
+uv sync --frozen                                  # Python 3.12 tools and development checks
 claude                                              # Open Claude Code in the toolkit
 ```
 

@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+
 # Find workspace root (where _internal/ lives)
 def find_workspace_root() -> Path:
     """Find the workspace root by looking for _internal directory."""
@@ -28,9 +29,18 @@ def load_registry() -> dict:
         return json.load(f)
 
 
+def get_default_voice_provider() -> str:
+    """Return the registry-owned default TTS provider."""
+    provider = load_registry().get("config", {}).get("defaultVoiceProvider", "kokoro")
+    if provider not in {"elevenlabs", "qwen3", "kokoro"}:
+        raise ValueError(f"Unsupported default voice provider in registry: {provider}")
+    return provider
+
+
 def get_voice_id() -> str | None:
     """Get the default voice ID from env var, falling back to registry."""
     from dotenv import load_dotenv
+
     load_dotenv()
 
     # First check environment variable
@@ -46,6 +56,7 @@ def get_voice_id() -> str | None:
 def get_elevenlabs_api_key() -> str | None:
     """Get ElevenLabs API key from environment."""
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("ELEVENLABS_API_KEY")
 
@@ -60,6 +71,7 @@ def get_default_output_dir(project_path: str | None = None) -> Path:
 def get_acemusic_api_key() -> str | None:
     """Get ACE-Step Music API key from environment."""
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("ACEMUSIC_API_KEY")
 
@@ -67,6 +79,7 @@ def get_acemusic_api_key() -> str | None:
 def get_runpod_api_key() -> str | None:
     """Get RunPod API key from environment."""
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("RUNPOD_API_KEY")
 
@@ -74,6 +87,7 @@ def get_runpod_api_key() -> str | None:
 def get_runpod_endpoint_id() -> str | None:
     """Get RunPod endpoint ID from environment."""
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("RUNPOD_ENDPOINT_ID")
 
@@ -81,6 +95,7 @@ def get_runpod_endpoint_id() -> str | None:
 def get_qwen3_tts_endpoint_id() -> str | None:
     """Get Qwen3-TTS RunPod endpoint ID from environment."""
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("RUNPOD_QWEN3_TTS_ENDPOINT_ID")
 
@@ -93,6 +108,7 @@ def get_modal_token() -> tuple[str | None, str | None]:
     web endpoint auth we read from .env.
     """
     from dotenv import load_dotenv
+
     load_dotenv()
     return os.getenv("MODAL_TOKEN_ID"), os.getenv("MODAL_TOKEN_SECRET")
 
@@ -104,6 +120,7 @@ def get_modal_endpoint_url(tool_name: str) -> str | None:
     e.g., MODAL_QWEN3_TTS_ENDPOINT_URL, MODAL_FLUX2_ENDPOINT_URL
     """
     from dotenv import load_dotenv
+
     load_dotenv()
     env_var = f"MODAL_{tool_name.upper()}_ENDPOINT_URL"
     return os.getenv(env_var)
@@ -136,6 +153,7 @@ def get_r2_config() -> dict | None:
     or None if not configured.
     """
     from dotenv import load_dotenv
+
     load_dotenv()
 
     account_id = os.getenv("R2_ACCOUNT_ID")
@@ -144,9 +162,13 @@ def get_r2_config() -> dict | None:
     bucket_name = os.getenv("R2_BUCKET_NAME", "video-toolkit")
 
     # Check if R2 is configured (all required fields present and not placeholder)
-    if (account_id and access_key_id and secret_access_key
+    if (
+        account_id
+        and access_key_id
+        and secret_access_key
         and account_id != "your_account_id_here"
-        and access_key_id != "your_access_key_id_here"):
+        and access_key_id != "your_access_key_id_here"
+    ):
         return {
             "account_id": account_id,
             "access_key_id": access_key_id,

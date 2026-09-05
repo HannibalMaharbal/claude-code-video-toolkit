@@ -1,12 +1,25 @@
 {
-  "voiceId": "YOUR_VOICE_ID_HERE",
-  "description": "Professional narrator voice for Digital Samba videos",
-  "settings": {
-    "stability": 0.75,
-    "similarityBoost": 0.9,
-    "style": 0.15,
-    "useSpeakerBoost": true
+  "provider": "kokoro",
+  "description": "Digital Samba voice: Kokoro TTS (free, local). European English preferred. Fallback: Qwen3-TTS. Premium: ElevenLabs.",
+  "kokoro": {
+    "voice": "bm_george",
+    "speed": 0.95
   },
-  "model": "eleven_multilingual_v2",
-  "notes": "Use a clear, professional tone. European English preferred."
+  "qwen3": {
+    "speaker": "Ryan",
+    "language": "Auto",
+    "tone": "professional",
+    "instruct": "Speak with a clear, professional European English accent.",
+    "clone": null
+  },
+  "elevenlabs": {
+    "voiceId": "",
+    "model": "eleven_multilingual_v2",
+    "settings": {
+      "stability": 0.75,
+      "similarityBoost": 0.9,
+      "style": 0.15,
+      "useSpeakerBoost": true
+    }
+  }
 }

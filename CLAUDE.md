@@ -107,8 +107,8 @@ import { AnimatedBackground, SlideTransition, Label } from '../../../../lib/comp
 Audio, video, and image tools in `tools/`. See registry `tools` section for the full catalog with descriptions, options, presets, and env vars. Every tool supports `--help`.
 
 ```bash
-# Setup
-pip install -r tools/requirements.txt
+# Setup (Python 3.12, locked)
+uv sync --frozen
 ```
 
 **Important: always invoke tools from the toolkit root directory.** When working inside a project (`projects/my-video/`), tool paths like `python3 tools/upscale.py` will fail because `tools/` is relative. Always use:
@@ -123,20 +123,28 @@ This is especially critical for background commands where the working directory 
 |------|-------|-------------|
 | **Project tools** | voiceover, music, music_gen, sfx, sync_timing | During video creation workflow |
 | **Utility tools** | redub, addmusic, notebooklm_brand, locate_watermark | Quick transformations on existing videos |
-| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | AI processing via RunPod or Modal (`--cloud runpod\|modal`) |
+| **Free local** | transcribe, kokoro_tts | Free transcription (mlx-whisper) + Free TTS (Kokoro) — Apple Silicon, no API key |
+| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | AI processing via Modal (free) or RunPod |
 
 Utility tools work on any video file without requiring a project structure.
 
 ### Voiceover Generation
 
+Default provider is **kokoro** (local, free, best quality — no API key, no cold start).
+
 ```bash
-# Per-scene generation (recommended)
+# Per-scene generation (recommended) — Kokoro by default
 python tools/voiceover.py --scene-dir public/audio/scenes --json
 
-# Using Qwen3-TTS (self-hosted, free alternative to ElevenLabs)
+# Pick a specific Kokoro voice
+python tools/voiceover.py --voice am_michael --scene-dir public/audio/scenes --json
+python tools/voiceover.py --voice af_heart --scene-dir public/audio/scenes --json
+python tools/voiceover.py --voice bm_george --speed 0.95 --scene-dir public/audio/scenes --json
+
+# Fallback: Qwen3-TTS (Modal, requires cold start)
 python tools/voiceover.py --provider qwen3 --tone warm --scene-dir public/audio/scenes --json
 
-# Single file (legacy)
+# Single file
 python tools/voiceover.py --script SCRIPT.md --output out.mp3
 ```
 
@@ -150,7 +158,31 @@ python3 tools/sync_timing.py --voiceover-json vo.json # Use voiceover.py output
 python3 tools/sync_timing.py --json                   # Machine-readable output
 ```
 
-### Qwen3-TTS (Standalone)
+### Free Transcription (mlx-whisper, Apple Silicon)
+
+```bash
+python tools/transcribe.py --input video.mp4               # Auto transcript
+python tools/transcribe.py --input audio.mp3 --output t.txt # Save to file
+python tools/transcribe.py --input video.mp4 --model large-v3 # Best quality
+python tools/transcribe.py --input video.mp4 --language de  # Force language
+```
+
+Models: `tiny` (fast) → `small` (default) → `medium` → `large-v3` (best quality)
+
+### Kokoro TTS (Standalone, local)
+
+```bash
+python tools/kokoro_tts.py --text "Hello world" --output hello.mp3
+python tools/kokoro_tts.py --text "Hello" --voice am_michael --output hello.mp3
+python tools/kokoro_tts.py --text "Hello" --voice bm_george --speed 0.9 --output slow.mp3
+python tools/kokoro_tts.py --list-voices   # 28 voices: af_heart, am_michael, bm_george, etc.
+```
+
+28 voices across 4 groups: American Female (af_*), American Male (am_*), British Female (bf_*), British Male (bm_*).
+Best all-around: `af_heart` (warm female), `am_michael` (professional male, default), `bm_george` (British professional).
+First run downloads model ~500MB (cached in `~/.cache/huggingface/`). Subsequent runs are instant.
+
+### Qwen3-TTS (Standalone, Modal)
 
 ```bash
 python tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3

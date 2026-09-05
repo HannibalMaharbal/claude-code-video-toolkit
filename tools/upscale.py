@@ -515,9 +515,9 @@ Examples:
     parser.add_argument(
         "--cloud",
         type=str,
-        default=None,
+        default="modal",
         choices=["runpod", "modal"],
-        help="Cloud GPU provider (default: runpod)",
+        help="Cloud GPU provider (default: modal)",
     )
     parser.add_argument(
         "--runpod",
@@ -576,8 +576,7 @@ def main():
     # Handle deprecated --runpod flag
     if args.runpod:
         print("Note: --runpod is deprecated, use --cloud runpod instead", file=sys.stderr)
-        if not args.cloud:
-            args.cloud = "runpod"
+        args.cloud = "runpod"
 
     # Handle --setup
     if args.setup:

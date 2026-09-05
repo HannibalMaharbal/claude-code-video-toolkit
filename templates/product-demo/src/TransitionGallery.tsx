@@ -7,18 +7,19 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, interpolate, Sequence } from 'remotion';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
+import type { TransitionPresentation } from '@remotion/transitions';
 import { slide } from '@remotion/transitions/slide';
 import { fade } from '@remotion/transitions/fade';
 import { wipe } from '@remotion/transitions/wipe';
 import { flip } from '@remotion/transitions/flip';
 
 // Import custom transitions from lib (relative path works for non-package imports)
-import { glitch } from '../../../lib/transitions/presentations/glitch';
-import { rgbSplit } from '../../../lib/transitions/presentations/rgb-split';
-import { zoomBlur } from '../../../lib/transitions/presentations/zoom-blur';
-import { lightLeak } from '../../../lib/transitions/presentations/light-leak';
-import { clockWipe } from '../../../lib/transitions/presentations/clock-wipe';
-import { pixelate } from '../../../lib/transitions/presentations/pixelate';
+import { glitch } from '@video-toolkit/remotion-shared/transitions/presentations/glitch';
+import { rgbSplit } from '@video-toolkit/remotion-shared/transitions/presentations/rgb-split';
+import { zoomBlur } from '@video-toolkit/remotion-shared/transitions/presentations/zoom-blur';
+import { lightLeak } from '@video-toolkit/remotion-shared/transitions/presentations/light-leak';
+import { clockWipe } from '@video-toolkit/remotion-shared/transitions/presentations/clock-wipe';
+import { pixelate } from '@video-toolkit/remotion-shared/transitions/presentations/pixelate';
 
 // Rich scene component with detailed content for better transition visibility
 const GalleryScene: React.FC<{
@@ -195,11 +196,15 @@ const GalleryScene: React.FC<{
 };
 
 // Single transition demo segment
-const TransitionDemo: React.FC<{
+const TransitionDemo = <PresentationProps extends Record<string, unknown>>({
+  name,
+  presentation,
+  transitionDuration = 60,
+}: {
   name: string;
-  presentation: ReturnType<typeof glitch>;
+  presentation: TransitionPresentation<PresentationProps>;
   transitionDuration?: number;
-}> = ({ name, presentation, transitionDuration = 60 }) => {
+}) => {
   const sceneBeforeDuration = 45; // 1.5 seconds before transition
   const sceneAfterDuration = 105; // 3.5 seconds after (includes 2s break before next)
 
@@ -218,6 +223,22 @@ const TransitionDemo: React.FC<{
     </TransitionSeries>
   );
 };
+
+const createTransition = <PresentationProps extends Record<string, unknown>>(
+  name: string,
+  presentation: TransitionPresentation<PresentationProps>,
+  duration: number,
+) => ({
+  name,
+  duration,
+  render: () => (
+    <TransitionDemo
+      name={name}
+      presentation={presentation}
+      transitionDuration={duration}
+    />
+  ),
+});
 
 // Intro slide
 const IntroSlide: React.FC = () => {
@@ -265,16 +286,16 @@ const IntroSlide: React.FC = () => {
 
 // Define all transitions to showcase
 const TRANSITIONS = [
-  { name: 'glitch()', presentation: glitch({ intensity: 0.9 }), duration: 25 },
-  { name: 'rgbSplit()', presentation: rgbSplit({ direction: 'horizontal' }), duration: 25 },
-  { name: 'zoomBlur()', presentation: zoomBlur({ direction: 'in' }), duration: 25 },
-  { name: 'lightLeak()', presentation: lightLeak({ temperature: 'warm' }), duration: 35 },
-  { name: 'clockWipe()', presentation: clockWipe({ direction: 'clockwise' }), duration: 25 },
-  { name: 'pixelate()', presentation: pixelate({ maxBlockSize: 50 }), duration: 25 },
-  { name: 'slide()', presentation: slide(), duration: 20 },
-  { name: 'fade()', presentation: fade(), duration: 25 },
-  { name: 'wipe()', presentation: wipe(), duration: 20 },
-  { name: 'flip()', presentation: flip(), duration: 25 },
+  createTransition('glitch()', glitch({ intensity: 0.9 }), 25),
+  createTransition('rgbSplit()', rgbSplit({ direction: 'horizontal' }), 25),
+  createTransition('zoomBlur()', zoomBlur({ direction: 'in' }), 25),
+  createTransition('lightLeak()', lightLeak({ temperature: 'warm' }), 35),
+  createTransition('clockWipe()', clockWipe({ direction: 'clockwise' }), 25),
+  createTransition('pixelate()', pixelate({ maxBlockSize: 50 }), 25),
+  createTransition('slide()', slide(), 20),
+  createTransition('fade()', fade(), 25),
+  createTransition('wipe()', wipe(), 20),
+  createTransition('flip()', flip(), 25),
 ];
 
 // Calculate segment duration (scene + transition + scene, minus overlap)
@@ -310,11 +331,7 @@ export const TransitionGallery: React.FC = () => {
           from={segments[i].from}
           durationInFrames={segments[i].duration}
         >
-          <TransitionDemo
-            name={t.name}
-            presentation={t.presentation}
-            transitionDuration={t.duration}
-          />
+          {t.render()}
         </Sequence>
       ))}
     </AbsoluteFill>

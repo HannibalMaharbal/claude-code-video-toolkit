@@ -1,0 +1,25 @@
+{
+  "name": "@video-toolkit/remotion-shared",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./brand": "./src/brand.ts",
+    "./components": "./src/components/index.ts",
+    "./components/utils": "./src/components/utils.ts",
+    "./project/types": "./src/project/types.ts",
+    "./theme": "./src/theme/index.ts",
+    "./transitions": "./src/transitions/index.ts",
+    "./transitions/TransitionGallery": "./src/transitions/TransitionGallery.tsx",
+    "./transitions/presentations/*": "./src/transitions/presentations/*.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@remotion/transitions": "4.0.520",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "4.0.520"
+  }
+}

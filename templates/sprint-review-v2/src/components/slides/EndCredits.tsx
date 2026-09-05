@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring } from 'remotion';
 import { useTheme } from '../../config/theme';
-import { hexToRgba } from '../../../../../lib/components/utils';
+import { hexToRgba } from '@video-toolkit/remotion-shared/components/utils';
 import type { CreditsContent, SprintInfo } from '../../config/types';
 
 interface EndCreditsProps {

@@ -1,22 +1,29 @@
 {
   "name": "sprint-review-template",
   "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "description": "Remotion template for creating sprint review videos",
   "scripts": {
     "studio": "npx remotion studio",
-    "render": "npx remotion render src/index.ts SprintReview out/sprint-review.mp4",
-    "render:preview": "npx remotion render src/index.ts SprintReview out/preview.mp4 --scale=0.5",
+    "typecheck": "tsc --noEmit",
+    "render": "npx remotion render src/index.ts SprintReview out/sprint-review.mp4 --crf=17",
+    "render:hq": "npx remotion render src/index.ts SprintReview out/sprint-review-hq.mp4 --codec=h265 --crf=16",
+    "render:preview": "npx remotion render src/index.ts SprintReview out/preview.mp4 --scale=0.5 --crf=23",
     "build": "npx remotion bundle src/index.ts",
     "upgrade": "npx remotion upgrade"
   },
   "dependencies": {
-    "@remotion/cli": "4.0.425",
-    "@remotion/paths": "4.0.425",
-    "@remotion/shapes": "4.0.425",
-    "@remotion/transitions": "4.0.425",
+    "@video-toolkit/remotion-shared": "1.0.0",
+    "@remotion/cli": "4.0.520",
+    "@remotion/paths": "4.0.520",
+    "@remotion/shapes": "4.0.520",
+    "@remotion/transitions": "4.0.520",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "4.0.425"
+    "remotion": "4.0.520"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

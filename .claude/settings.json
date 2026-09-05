@@ -1,1 +1,29 @@
-{}
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 tools/orchestrator.py*)",
+      "Bash(python3 tools/input_parser.py*)",
+      "Bash(python3 tools/scene_splitter.py*)",
+      "Bash(python3 tools/voiceover.py*)",
+      "Bash(python3 tools/music_gen.py*)",
+      "Bash(python3 tools/flux2.py*)",
+      "Bash(python3 tools/ltx2.py*)",
+      "Bash(python3 tools/sync_timing.py*)",
+      "Bash(ffmpeg*)",
+      "Bash(ffprobe*)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if ls output/*.mp4 2>/dev/null | grep -q $(date +%Y-%m-%d); then osascript -e 'display notification \"MP4 fertig in output/\" with title \"Video Orchestrator\" sound name \"Glass\"'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

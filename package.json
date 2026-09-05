@@ -1,0 +1,28 @@
+{
+  "name": "@video-toolkit/workspace",
+  "version": "0.14.4",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "workspaces": [
+    "packages/remotion-shared",
+    "templates/product-demo",
+    "templates/sprint-review",
+    "templates/sprint-review-v2"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint:python": "uv run ruff check tools/config.py tools/input_parser.py tools/scene_splitter.py tools/orchestrator.py tools/media_validation.py tests",
+    "typecheck:python": "uv run mypy",
+    "test:python": "uv run pytest",
+    "verify": "npm run typecheck && npm run lint:python && npm run typecheck:python && npm run test:python && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.2.0",
+    "typescript": "5.9.3"
+  },
+  "packageManager": "npm@10.9.4"
+}

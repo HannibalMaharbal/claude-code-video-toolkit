@@ -1,7 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig, getStaticFiles } from 'remotion';
 import { useTheme } from '../../config/theme';
-import { hexToRgba } from '../../../../../lib/components/utils';
+import { hexToRgba } from '@video-toolkit/remotion-shared/components/utils';
 import type { SummaryContent } from '../../config/types';
 
 interface SummarySlideProps {

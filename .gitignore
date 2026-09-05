@@ -28,6 +28,9 @@ yarn-error.log*
 dist/
 build/
 out/
+output/
+cache/
+models/
 *.mp4
 *.webm
 *.gif

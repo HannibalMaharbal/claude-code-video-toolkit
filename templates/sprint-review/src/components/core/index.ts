@@ -10,7 +10,7 @@ export {
   SlideTransition,
   Label,
   NarratorPiP,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';
 
 // Re-export types if needed by template code
 export type {
@@ -18,4 +18,4 @@ export type {
   TransitionStyle,
   LabelPosition,
   LabelSize,
-} from '../../../../../lib/components';
+} from '@video-toolkit/remotion-shared/components';

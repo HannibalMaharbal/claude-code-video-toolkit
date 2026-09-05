@@ -89,8 +89,8 @@ def generate_video(
     input_path: Optional[str] = None,
     output_path: Optional[str] = None,
     negative_prompt: Optional[str] = None,
-    width: int = 768,
-    height: int = 512,
+    width: int = 1024,
+    height: int = 576,
     num_frames: int = 121,
     fps: int = 24,
     steps: Optional[int] = None,
@@ -134,8 +134,10 @@ def generate_video(
 
     if negative_prompt:
         payload["input"]["negative_prompt"] = negative_prompt
-    if steps is not None:
-        payload["input"]["num_inference_steps"] = steps
+    # Default: 40 steps for standard quality (higher than server default of 30)
+    effective_steps = steps if steps is not None else (40 if quality == "standard" else None)
+    if effective_steps is not None:
+        payload["input"]["num_inference_steps"] = effective_steps
     if seed is not None:
         payload["input"]["seed"] = seed
 
@@ -216,10 +218,10 @@ Examples:
 
     # Video parameters
     video_group = parser.add_argument_group("Video parameters")
-    video_group.add_argument("--width", "-W", type=int, default=768,
-                             help="Video width, divisible by 64 (default: 768)")
-    video_group.add_argument("--height", "-H", type=int, default=512,
-                             help="Video height, divisible by 64 (default: 512)")
+    video_group.add_argument("--width", "-W", type=int, default=1024,
+                             help="Video width, divisible by 64 (default: 1024)")
+    video_group.add_argument("--height", "-H", type=int, default=576,
+                             help="Video height, divisible by 64 (default: 576)")
     video_group.add_argument("--num-frames", "-n", type=int, default=121,
                              help="Number of frames, (n-1)%%8==0 (default: 121, ~5s)")
     video_group.add_argument("--fps", type=int, default=24,

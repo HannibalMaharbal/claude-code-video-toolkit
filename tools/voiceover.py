@@ -37,7 +37,13 @@ from dotenv import load_dotenv
 
 # Add parent to path for local imports
 sys.path.insert(0, str(Path(__file__).parent))
-from config import get_brand_dir, get_elevenlabs_api_key, get_voice_id, load_brand_voice_config
+from config import (
+    get_brand_dir,
+    get_default_voice_provider,
+    get_elevenlabs_api_key,
+    get_voice_id,
+    load_brand_voice_config,
+)
 
 
 def _get_elevenlabs_imports():
@@ -67,6 +73,7 @@ def _get_elevenlabs_imports():
 
 
 def parse_args():
+    default_provider = get_default_voice_provider()
     parser = argparse.ArgumentParser(
         description="Generate voiceover using ElevenLabs or Qwen3-TTS",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -109,9 +116,10 @@ Examples:
     parser.add_argument(
         "--provider",
         type=str,
-        default="elevenlabs",
-        choices=["elevenlabs", "qwen3"],
-        help="TTS provider (default: elevenlabs)",
+        default=default_provider,
+        choices=["elevenlabs", "qwen3", "kokoro"],
+        help=f"TTS provider (default: {default_provider}, from toolkit registry). "
+        "kokoro=local/free, qwen3=Modal/free, elevenlabs=paid",
     )
 
     # ElevenLabs-specific options
@@ -176,7 +184,8 @@ Examples:
     parser.add_argument(
         "--tone",
         type=str,
-        help="Qwen3-TTS tone preset (e.g., 'warm', 'professional'). See 'python tools/qwen3_tts.py --list-tones'.",
+        default="professional",
+        help="Qwen3-TTS tone preset (default: professional). See 'python tools/qwen3_tts.py --list-tones'.",
     )
     parser.add_argument(
         "--ref-audio",
@@ -197,6 +206,14 @@ Examples:
         "--top-p",
         type=float,
         help="Qwen3-TTS nucleus sampling (default: model default ~0.8, range: 0.1-1.0)",
+    )
+
+    # Kokoro-specific options
+    parser.add_argument(
+        "--voice",
+        type=str,
+        default="am_michael",
+        help="Kokoro TTS voice (default: am_michael). Use 'python tools/kokoro_tts.py --list-voices' to see all 28 voices.",
     )
 
     # Cloud GPU provider (for Qwen3-TTS)
@@ -342,12 +359,32 @@ def generate_single_audio_qwen3(
     )
 
 
+def generate_single_audio_kokoro(
+    script: str,
+    output_path: Path,
+    voice: str = "am_michael",
+    speed: float = 1.0,
+) -> dict:
+    """Generate a single audio file from script text using Kokoro TTS. Returns result dict."""
+    from kokoro_tts import generate_audio
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return generate_audio(
+        text=script,
+        output_path=str(output_path),
+        voice=voice,
+        speed=speed,
+        verbose=False,
+    )
+
+
 def process_scene_directory(
     scene_dir: Path,
     dry_run: bool = False,
     json_output: bool = False,
     # Provider
-    provider: str = "elevenlabs",
+    provider: str = "kokoro",
     # ElevenLabs params
     client=None,
     voice_id: str = "",
@@ -365,6 +402,9 @@ def process_scene_directory(
     temperature: float | None = None,
     top_p: float | None = None,
     cloud: str = "runpod",
+    # Kokoro params
+    voice: str = "am_michael",
+    kokoro_speed: float = 1.0,
 ) -> list[dict]:
     """Process all .txt files in directory, generate .mp3 for each."""
     txt_files = sorted(scene_dir.glob("*.txt"))
@@ -420,7 +460,14 @@ def process_scene_directory(
             if not json_output:
                 print(f"Generating {mp3_file.name}...", file=sys.stderr)
 
-            if provider == "qwen3":
+            if provider == "kokoro":
+                result = generate_single_audio_kokoro(
+                    script=script,
+                    output_path=mp3_file,
+                    voice=voice,
+                    speed=kokoro_speed,
+                )
+            elif provider == "qwen3":
                 result = generate_single_audio_qwen3(
                     script=script,
                     output_path=mp3_file,
@@ -554,6 +601,12 @@ def main():
                 args.instruct = qwen3_cfg["instruct"]
             if qwen3_cfg.get("tone") and not args.tone and not args.instruct:
                 args.tone = qwen3_cfg["tone"]
+        elif provider == "kokoro":
+            kokoro_cfg = voice_config.get("kokoro", {})
+            if kokoro_cfg.get("voice") and args.voice == "am_michael":
+                args.voice = kokoro_cfg["voice"]
+            if kokoro_cfg.get("speed") and args.speed == 1.0:
+                args.speed = kokoro_cfg["speed"]
         elif provider == "elevenlabs":
             # Apply voice ID from brand if not explicitly provided
             if not args.voice_id and voice_config.get("voiceId") and voice_config["voiceId"] != "YOUR_VOICE_ID_HERE":
@@ -645,6 +698,8 @@ def main():
                 temperature=args.temperature,
                 top_p=args.top_p,
                 cloud=args.cloud,
+                voice=args.voice,
+                kokoro_speed=args.speed,
             )
             result = {
                 "dry_run": True,
@@ -699,6 +754,8 @@ def main():
             temperature=args.temperature,
             top_p=args.top_p,
             cloud=args.cloud,
+            voice=args.voice,
+            kokoro_speed=args.speed,
         )
 
         # Build final result
@@ -786,10 +843,22 @@ def main():
 
     # Generate voiceover
     if not args.json:
-        provider_label = "Qwen3-TTS" if provider == "qwen3" else "ElevenLabs"
+        if provider == "kokoro":
+            provider_label = "Kokoro TTS"
+        elif provider == "qwen3":
+            provider_label = "Qwen3-TTS"
+        else:
+            provider_label = "ElevenLabs"
         print(f"Generating voiceover ({len(script)} chars, {provider_label})...", file=sys.stderr)
 
-    if provider == "qwen3":
+    if provider == "kokoro":
+        result = generate_single_audio_kokoro(
+            script=script,
+            output_path=output_path,
+            voice=args.voice,
+            speed=args.speed,
+        )
+    elif provider == "qwen3":
         result = generate_single_audio_qwen3(
             script=script,
             output_path=output_path,
@@ -817,7 +886,9 @@ def main():
 
     result["mode"] = "single"
     result["provider"] = provider
-    if provider == "elevenlabs":
+    if provider == "kokoro":
+        result["voice"] = args.voice
+    elif provider == "elevenlabs":
         result["voice_id"] = voice_id
         result["model"] = args.model
 

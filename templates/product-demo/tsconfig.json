@@ -6,12 +6,16 @@
     "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true,
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "react/jsx-runtime.js": ["../../node_modules/@types/react/jsx-runtime.d.ts"]
+    },
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "types": ["node", "react"],
     "noEmit": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "../../types/**/*.d.ts"]
 }
