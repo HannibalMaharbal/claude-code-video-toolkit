@@ -33,3 +33,8 @@
 ## Commit-Vorbereitung
 
 Empfohlener Migrations-Commit nach unabhängiger Diff-Prüfung: `refactor(toolkit): migrate templates to verified root workspace`
+
+## Lokale Commits
+
+- `7631865` — Root-Workspace, Shared-Paket, Python-Toolchain, CI und Security-Grundlagen.
+- `e427378` — Medienvalidierung des ersten und letzten Videoframes.
