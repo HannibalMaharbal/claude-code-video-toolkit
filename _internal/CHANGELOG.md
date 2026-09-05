@@ -6,6 +6,132 @@ All notable changes to claude-code-video-toolkit.
 
 ---
 
+## Unreleased
+
+---
+
+## 2026-08-31 (v0.20.0)
+
+### Added
+- **SoulX-FlashHead talking head** (`tools/soulx.py` + `docker/modal-soulx/`) — the toolkit's
+  default talking head generator (Soul AI Lab, Apache 2.0, 1.3B), Modal-only. Preserves the
+  input aspect ratio, so 16:9 presenter images come back 16:9 with no `--preprocess`
+  workaround, and `--size` snaps to the model's latent grid while keeping the aspect. It is
+  the default because identity holds over a long take: measured at **97% of frame-zero
+  sharpness at 70s, flat across 72 segments**, so per-scene generation is a choice rather
+  than a workaround. ~$0.0024 per second of output against SadTalker's ~$0.0014. Decision
+  table in CLAUDE.md, full detail in `docs/soulx.md`. (#81)
+
+### Changed
+- **`docker/modal-soulx/` keeps its weights in a Modal Volume**, unlike the other Modal apps
+  which bake them into the image. Measured: redeploy after a code change is ~2.3s against
+  79-385s baked, while cold start and generation speed are unchanged. Needs a one-off
+  `modal run …::populate_weights` (14.7 GB). The settled apps stay baked.
+- Upstream repo ref and both model revisions in `modal-soulx` pinned by SHA — weights in a
+  Volume aren't tied to the image, so nothing else prevents drift. (same lesson as #71/#74)
+- **`NarratorPiP`** honours its `objectPosition` prop, which was declared and documented but
+  silently ignored by a hardcoded value, and gains an `objectFit` prop (default `contain`,
+  unchanged behaviour).
+- `tools/cloud_gpu.py` learned `soulx`, including its GPU tier, so its jobs report a cost
+  estimate.
+
+### Removed
+- **EchoMimicV3** (`tools/echomimic3.py`, `docker/modal-echomimic3/`, `docs/echomimic3.md`),
+  added earlier in this unreleased cycle and never part of a tagged release. Identity drift
+  made it unusable for real narration: on a controlled A/B — same photo, same 80s audio,
+  same 544x736 — it fell to 50% of frame-zero sharpness by 70s, collapsing to a featureless
+  smear, where SoulX-FlashHead held 97%. The failure is absorbing rather than gradual, since
+  each segment re-anchors on the previous one's output, so it could not be tuned out; it
+  implied a ~30s render ceiling that shaped the surrounding design. SoulX supersedes it on
+  every axis that mattered — drift, cost (~3.7x cheaper), wall clock (~3-6x faster) — while
+  keeping aspect-ratio preservation. (#81, closes #80)
+
+---
+
+## 2026-08-27 (v0.19.0)
+
+### Added
+- **uv is the install path** — `pyproject.toml` + `uv.lock`; `uv sync` (extras: `whisper`, `modal`, `youtube`) and every doc/tool now says `uv run tools/…`. `tools/requirements.txt` stays as the pip fallback. Contributed by @AsharibAli (#33, rebased as #59).
+- **Kiro CLI support** — `scripts/migrate_to_kiro.py` installs the toolkit's skills/commands for Kiro with steering-file generation; see `docs/kiro.md`. Contributed by @homeo26 (#55). Follow-up refactor tracked in #58.
+- **Version maintenance (closes #23)** — `scripts/check_versions.py` (toolkit-wide Remotion/Python/toolkit staleness, wired into `/versions`); `tests/render-baseline/` + `scripts/render-baseline.mjs` + `render-baseline.yml` (same-runner before/after render diff that gates Remotion bumps in CI); `scripts/bump_remotion.py` as `/versions --bump-toolkit`; grouped monthly Dependabot for the `remotion` group. (#63, #64, #65)
+- **`sync_timing.py` generic mode** — pairs any `*AudioFile` with `*DurationSeconds` so ticket-driven and future config layouts work without tool changes. (#62)
+- **Community add-ons** README section for integrations that live in their own repos (first entry: VOICEPEAK offline Japanese TTS, #42), plus CONTRIBUTING guidance for single-vendor integrations and automated/AI-generated PRs. (#60, #61)
+
+### Changed
+- **Remotion 4.0.425 → 4.0.518** across all templates, examples, showcases and the baseline harness — first bump gated by the render-baseline check (all frames identical). (#67)
+- All Remotion projects now pin the same exact version (four stragglers were on 4.0.381/4.0.382/`^4.0.0`).
+
+### Housekeeping
+- External PR queue triaged: MiniMax video/music and Atlas Cloud bot PRs closed under the new policy; Edge-TTS (#46) has review feedback pending.
+- Stale branches removed; unmerged experiments preserved as `archive/*` tags.
+
+---
+
+## 2026-08-26 (v0.18.0)
+
+### Added
+- **YouTube publishing** — `tools/youtube_upload.py` + `/publish` command. OAuth login (`--auth`), private-by-default upload, scheduled go-live (`--publish-at`), thumbnails, `--dry-run` validation, 403s classified by API reason. Setup guide in `docs/youtube-upload.md`; google-* deps are opt-in in `tools/requirements.txt`. (#29, #37, #38, #39, #40)
+- **60db TTS provider** — third `voiceover.py --provider 60db` backend plus standalone `tools/sixtydb_tts.py` (synthesize / stream / websocket transports, `--list-voices`). Unified 0-1 voice settings auto-convert to 60db's 0-100 scale; `redub.py --tts-provider 60db`. Brands carry a `sixtydb` block in `voice.json`. (#27)
+- **`_internal/narrative-patterns.md`** — Discovery Story structure for sprint reviews (reorder by narrative arc, turning-point slides, honest bridge framing).
+- **`docs/ltx2.md` Windows gotchas** + LTX-2 Modal config wired into `verify_setup.py`. (#51, #53)
+
+### Changed
+- **Remotion skills sync** now tracks upstream's new per-topic layout via `skills/remotion-best-practices/` (router skill embedding markup/maps/captions/render/saas/studio/docs/upgrade). Workflow fails loudly on the next re-layout and carries the upstream skill version in PR titles. First sync from the new layout: 39 → 137 files. (#56)
+- **Modal image-edit** requests A100-80GB (OOMed on 40GB).
+- `.gitignore` covers `scratch/`, Playwright run artifacts, recursive `assets/voices`; duplicate project copies under `projects/` untracked.
+
+### Fixed
+- Weekly Remotion skills sync had failed every run since 2026-07-13 (upstream directory moved).
+- `verify_setup.py` accepts both `modal` CLI JSON key casings when detecting deployed apps.
+
+### Registry
+- Added missing entries: `align_captions` tool, `quick-spot` / `data-viz-chart` / `ds-crt-stinger` / `sky-blue-short` examples. `the-space-between` marked showcase-only (no source directory).
+
+---
+
+## 2026-06-10 (v0.17.0)
+
+### Added
+- **concept-explainer-short template** — 9:16 vertical TikTok/Reels/Shorts explainers. First pure Python/moviepy template: `scenes.json` → `gen_vo.py` (per-scene TTS) → `gen_captions.py` (whisper forced-align) → `build.py` (Ken Burns stills, boomerang clips, karaoke caption pills, ducked music). (#31)
+- **`examples/sky-blue-short`** — 52s showcase of the template with all assets committed.
+- **TTS pacing QC** — `tools/pacing.py`; `voiceover.py` and `qwen3_tts.py` report per-take `wpm` + `pacing` label and accept `--max-wpm` for a pitch-preserving atempo clamp. Fixes cloned voices inheriting a rushed pace from their reference. (#30)
+
+### Docs
+- README restructured to lead with finished videos; "Using with Codex" moved to `docs/codex.md`.
+
+---
+
+## 2026-06-08 (v0.16.0)
+
+### Added
+- **Ideogram 4 text-to-image** — `tools/ideogram4.py` + `ideogram4` skill. Structured JSON captions for legible in-image text and exact brand colours; hosted paid API. FLUX-vs-Ideogram decision rule added to CLAUDE.md. (#28)
+- **Qwen3-TTS v0.2** — VoiceDesign mode (`--design-instruct`), shared-prompt cloning for consistent multi-scene narration, `clone.design` brand schema with self-caching reference; `tools/align_captions.py` (Scribe-based caption timing alignment).
+- **Codex migration flow** for toolkit skills/commands (#16, thanks @kimhoontae-gogo); thin `AGENTS.md`.
+
+### Changed
+- Remotion pinned to exact versions in lab examples; CLAUDE.md clarifies the `<OffthreadVideo>` choice vs upstream `@remotion/media`.
+- Official Remotion skills synced (upstream 277510e). (#17)
+- GitHub Actions bumped to Node 24-compatible versions; docker-build workflow handles multi-commit pushes and skips `modal-*` dirs.
+
+### Fixed
+- Python 3.9 compatibility restored across `tools/` via `from __future__ import annotations`. (#22)
+- `modal-upscale` basicsr build conflict. (#19, thanks @ATECHPCS)
+- Codex migration name read from registry; no-op skip entry dropped. (closes #20)
+
+---
+
+## 2026-04-21 (v0.15.0)
+
+### Added
+- **LTX-2 style LoRA support** with `crt-terminal` preset.
+- **`examples/ds-crt-stinger`** — 6s CRT LoRA + grunged-logo brand stinger.
+- Animated synthwave README banner (`showcase/banner`).
+
+### Changed
+- Official Remotion skills synced (upstream 41a3b06); "Stsrt" → "Start" typo fixed. (#14)
+
+---
+
 ## 2026-04-09 (v0.14.2)
 
 ### Added

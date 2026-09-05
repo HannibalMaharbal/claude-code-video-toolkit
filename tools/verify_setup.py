@@ -4,9 +4,9 @@
 Run after /setup to confirm everything is working, or anytime to diagnose issues.
 
 Usage:
-    python3 tools/verify_setup.py           # Full check (no cloud calls)
-    python3 tools/verify_setup.py --test    # Full check + smoke tests (makes cloud GPU calls)
-    python3 tools/verify_setup.py --json    # Machine-readable output
+    uv run tools/verify_setup.py           # Full check (no cloud calls)
+    uv run tools/verify_setup.py --test    # Full check + smoke tests (makes cloud GPU calls)
+    uv run tools/verify_setup.py --json    # Machine-readable output
 """
 
 import json
@@ -80,7 +80,7 @@ def check_prerequisites() -> list[dict]:
             "name": "pip packages",
             "required": False,
             "ok": False,
-            "detail": "pip install -r tools/requirements.txt",
+            "detail": "uv sync",
         })
 
     # Modal CLI
@@ -89,7 +89,7 @@ def check_prerequisites() -> list[dict]:
         "name": "Modal CLI",
         "required": False,
         "ok": ok,
-        "detail": version if ok else "pip install modal",
+        "detail": version if ok else "uv sync --extra modal",
     })
 
     return results
@@ -143,16 +143,22 @@ def check_modal_apps() -> dict:
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
-            return {"ok": False, "apps": [], "detail": "modal app list failed — run `modal setup`?"}
+            return {"ok": False, "apps": [], "detail": "modal app list failed — run `uv run modal setup`?"}
 
         apps = json.loads(result.stdout)
+        # `modal app list --json` key casing depends on CLI version: <=1.3.x emits
+        # the capitalised table headers ("Description", "State"), newer CLIs emit
+        # lowercase ("description", "state"). Accept both.
+        def field(app: dict, key: str) -> str:
+            return app.get(key) or app.get(key.capitalize()) or ""
+
         toolkit_apps = [
             a for a in apps
-            if a.get("Description", "").startswith("video-toolkit-")
-            and a.get("State") == "deployed"
+            if field(a, "description").startswith("video-toolkit-")
+            and field(a, "state") == "deployed"
         ]
 
-        app_names = [a["Description"] for a in toolkit_apps]
+        app_names = [field(a, "description") for a in toolkit_apps]
         return {
             "ok": len(toolkit_apps) > 0,
             "apps": app_names,
@@ -172,6 +178,7 @@ def check_modal_env_vars() -> list[dict]:
         "MODAL_MUSIC_GEN_ENDPOINT_URL": "Music (ACE-Step)",
         "MODAL_SADTALKER_ENDPOINT_URL": "Talking Heads (SadTalker)",
         "MODAL_DEWATERMARK_ENDPOINT_URL": "Watermark Removal (ProPainter)",
+        "MODAL_LTX2_ENDPOINT_URL": "Video (LTX-2)",
     }
 
     results = []
@@ -314,7 +321,7 @@ def main():
     modal_configured = sum(1 for t in modal_env if t["ok"])
     results["modal_tools"] = modal_env
     if verbose:
-        print(f"Modal ({modal_configured}/7 tools):")
+        print(f"Modal ({modal_configured}/{len(modal_env)} tools):")
         for t in modal_env:
             print(f"  {'[x]' if t['ok'] else '[ ]'} {t['name']}: {t['detail']}")
 

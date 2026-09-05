@@ -22,45 +22,45 @@ Cloud providers:
 
 Examples:
   # Basic background music (uses acemusic cloud API by default)
-  python tools/music_gen.py --prompt "Subtle corporate tech" --duration 60 --output bg.mp3
+  uv run tools/music_gen.py --prompt "Subtle corporate tech" --duration 60 --output bg.mp3
 
   # Generate 4 variations, pick the best
-  python tools/music_gen.py --prompt "Upbeat electronic" --duration 30 --variations 4 --output intro.mp3
+  uv run tools/music_gen.py --prompt "Upbeat electronic" --duration 30 --variations 4 --output intro.mp3
 
   # Disable thinking mode for faster generation
-  python tools/music_gen.py --no-thinking --prompt "Quick draft" --duration 30 --output draft.mp3
+  uv run tools/music_gen.py --no-thinking --prompt "Quick draft" --duration 30 --output draft.mp3
 
   # With musical control
-  python tools/music_gen.py --prompt "Upbeat electronic" --duration 30 --bpm 128 --key "G Major" --output intro.mp3
+  uv run tools/music_gen.py --prompt "Upbeat electronic" --duration 30 --bpm 128 --key "G Major" --output intro.mp3
 
   # Vocal music with lyrics
-  python tools/music_gen.py --prompt "Indie pop" --lyrics "Hello world\\nWe build together" --duration 30 --output jingle.mp3
+  uv run tools/music_gen.py --prompt "Indie pop" --lyrics "Hello world\\nWe build together" --duration 30 --output jingle.mp3
 
   # Scene presets for video production
-  python tools/music_gen.py --preset corporate-bg --duration 60 --output bg.mp3
-  python tools/music_gen.py --preset tension --duration 20 --output problem.mp3
-  python tools/music_gen.py --preset cta --duration 15 --brand digital-samba --output cta.mp3
+  uv run tools/music_gen.py --preset corporate-bg --duration 60 --output bg.mp3
+  uv run tools/music_gen.py --preset tension --duration 20 --output problem.mp3
+  uv run tools/music_gen.py --preset cta --duration 15 --brand digital-samba --output cta.mp3
 
   # Cover / style transfer
-  python tools/music_gen.py --cover --reference theme.mp3 --prompt "Same style, longer" --duration 90 --output extended.mp3
+  uv run tools/music_gen.py --cover --reference theme.mp3 --prompt "Same style, longer" --duration 90 --output extended.mp3
 
   # Repaint a weak section
-  python tools/music_gen.py --repaint --input track.mp3 --repaint-start 15 --repaint-end 25 --prompt "Guitar solo" --output fixed.mp3
+  uv run tools/music_gen.py --repaint --input track.mp3 --repaint-start 15 --repaint-end 25 --prompt "Guitar solo" --output fixed.mp3
 
   # Continue from existing audio
-  python tools/music_gen.py --continuation --input track.mp3 --prompt "Continue with jazz piano" --output extended.mp3
+  uv run tools/music_gen.py --continuation --input track.mp3 --prompt "Continue with jazz piano" --output extended.mp3
 
   # Stem extraction
-  python tools/music_gen.py --extract vocals --input mixed.mp3 --output vocals.mp3
+  uv run tools/music_gen.py --extract vocals --input mixed.mp3 --output vocals.mp3
 
   # List presets
-  python tools/music_gen.py --list-presets
+  uv run tools/music_gen.py --list-presets
 
   # Fall back to self-hosted Modal
-  python tools/music_gen.py --cloud modal --prompt "Background music" --duration 60 --output bg.mp3
+  uv run tools/music_gen.py --cloud modal --prompt "Background music" --duration 60 --output bg.mp3
 
   # Setup RunPod endpoint (first-time, for self-hosted)
-  python tools/music_gen.py --setup
+  uv run tools/music_gen.py --setup
 """
 
 import argparse
@@ -76,13 +76,13 @@ try:
     from dotenv import load_dotenv
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Install with: pip install requests python-dotenv")
+    print("Install with: uv sync")
     sys.exit(1)
 
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent))
-from file_transfer import download_from_url, get_r2_payload_config
+from file_transfer import delete_from_r2, download_from_url, get_r2_payload_config
 
 # --- Constants ---
 
@@ -652,7 +652,11 @@ def generate_music(
 
     if "output_url" in result:
         log("Downloading from R2...", "dim")
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     elif "audio_base64" in result:
         with open(output_path, "wb") as f:
             f.write(base64.b64decode(result["audio_base64"]))
@@ -748,7 +752,11 @@ def generate_cover(
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     if "output_url" in result:
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     elif "audio_base64" in result:
         with open(output_path, "wb") as f:
             f.write(base64.b64decode(result["audio_base64"]))
@@ -823,7 +831,11 @@ def extract_stem(
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
     if "output_url" in result:
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     elif "audio_base64" in result:
         with open(output_path, "wb") as f:
             f.write(base64.b64decode(result["audio_base64"]))
@@ -1126,8 +1138,8 @@ def setup_runpod(gpu_id: str = "AMPERE_24,ADA_24", verbose: bool = True) -> dict
             print(f"Endpoint ID:  {result['endpoint_id']}")
             print()
             print("You can now run:")
-            print('  python tools/music_gen.py --prompt "Upbeat tech" --duration 60 --output music.mp3')
-            print('  python tools/music_gen.py --preset corporate-bg --duration 120 --output bg.mp3')
+            print('  uv run tools/music_gen.py --prompt "Upbeat tech" --duration 60 --output music.mp3')
+            print('  uv run tools/music_gen.py --preset corporate-bg --duration 120 --output bg.mp3')
             print()
 
     except Exception as e:

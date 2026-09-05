@@ -6,25 +6,26 @@ Cloud providers: RunPod (default), Modal.
 
 Usage:
     # Cloud processing (RunPod, default)
-    python tools/upscale.py --input image.jpg --output upscaled.png --cloud runpod
+    uv run tools/upscale.py --input image.jpg --output upscaled.png --cloud runpod
 
     # Using Modal
-    python tools/upscale.py --input image.jpg --output upscaled.png --cloud modal
+    uv run tools/upscale.py --input image.jpg --output upscaled.png --cloud modal
 
     # Specify model and scale
-    python tools/upscale.py --input image.jpg --output upscaled.png --model anime --scale 4 --cloud runpod
+    uv run tools/upscale.py --input image.jpg --output upscaled.png --model anime --scale 4 --cloud runpod
 
     # With face enhancement
-    python tools/upscale.py --input image.jpg --output upscaled.png --face-enhance --cloud runpod
+    uv run tools/upscale.py --input image.jpg --output upscaled.png --face-enhance --cloud runpod
 
     # Legacy flag (deprecated, use --cloud runpod)
-    python tools/upscale.py --input image.jpg --output upscaled.png --runpod
+    uv run tools/upscale.py --input image.jpg --output upscaled.png --runpod
 
 Models:
     - general: RealESRGAN_x4plus (default, good for most images)
     - anime: RealESRGAN_x4plus_anime_6B (optimized for anime/illustration)
     - photo: realesr-general-x4v3 (alternative general model)
 """
+from __future__ import annotations
 
 import argparse
 import json
@@ -38,7 +39,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 from file_transfer import (
-    upload_to_storage, download_from_r2, delete_from_r2,
+    upload_to_storage, download_from_r2, r2_cleanup,
     download_from_url, get_r2_payload_config,
 )
 
@@ -61,86 +62,84 @@ def process_with_cloud(
     progress=None,
 ) -> dict:
     """Process image using cloud GPU endpoint."""
-    r2_keys_to_cleanup = []
-
-    if verbose:
-        print(f"Cloud provider: {cloud}", file=sys.stderr)
-
-    # Upload image
-    image_url, image_r2_key = upload_to_storage(input_path, "upscale/input")
-    if not image_url:
-        return {"error": "Failed to upload image"}
-    if image_r2_key:
-        r2_keys_to_cleanup.append(image_r2_key)
-
-    # Build payload
-    if verbose:
-        print(f"Submitting job (scale={scale}, model={model})...", file=sys.stderr)
-
-    payload = {
-        "input": {
-            "operation": "upscale",
-            "image_url": image_url,
-            "scale": scale,
-            "model": model,
-            "face_enhance": face_enhance,
-            "output_format": output_format,
-        }
-    }
-
-    r2_payload = get_r2_payload_config()
-    if r2_payload:
-        payload["input"]["r2"] = r2_payload
-
-    # Call cloud GPU endpoint
-    from cloud_gpu import call_cloud_endpoint
-
-    result, elapsed = call_cloud_endpoint(
-        provider=cloud,
-        payload=payload,
-        tool_name="upscale",
-        timeout=timeout,
-        progress_label="Upscaling image",
-        verbose=verbose,
-        progress=progress,
-    )
-
-    if isinstance(result, dict) and result.get("error"):
-        return {"error": result["error"]}
-
-    # Download result
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    downloaded = False
-
-    output_r2_key = result.get("r2_key") if isinstance(result, dict) else None
-    output_url = result.get("output_url") if isinstance(result, dict) else None
-
-    if output_r2_key:
+    with r2_cleanup() as r2_keys_to_cleanup:
         if verbose:
-            print(f"Downloading result from R2...", file=sys.stderr)
-        downloaded = download_from_r2(output_r2_key, output_path)
-        if downloaded:
-            r2_keys_to_cleanup.append(output_r2_key)
+            print(f"Cloud provider: {cloud}", file=sys.stderr)
+
+        # Upload image
+        image_url, image_r2_key = upload_to_storage(input_path, "upscale/input")
+        if not image_url:
+            return {"error": "Failed to upload image"}
+        if image_r2_key:
+            r2_keys_to_cleanup.append(image_r2_key)
+
+        # Build payload
+        if verbose:
+            print(f"Submitting job (scale={scale}, model={model})...", file=sys.stderr)
+
+        payload = {
+            "input": {
+                "operation": "upscale",
+                "image_url": image_url,
+                "scale": scale,
+                "model": model,
+                "face_enhance": face_enhance,
+                "output_format": output_format,
+            }
+        }
+
+        r2_payload = get_r2_payload_config()
+        if r2_payload:
+            payload["input"]["r2"] = r2_payload
+
+        # Call cloud GPU endpoint
+        from cloud_gpu import call_cloud_endpoint
+
+        result, elapsed = call_cloud_endpoint(
+            provider=cloud,
+            payload=payload,
+            tool_name="upscale",
+            timeout=timeout,
+            progress_label="Upscaling image",
+            verbose=verbose,
+            progress=progress,
+        )
+
+        if isinstance(result, dict) and result.get("error"):
+            return {"error": result["error"]}
+
+        # Download result
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        downloaded = False
+
+        output_r2_key = result.get("r2_key") if isinstance(result, dict) else None
+        output_url = result.get("output_url") if isinstance(result, dict) else None
+
+        if output_r2_key:
             if verbose:
-                size_kb = Path(output_path).stat().st_size // 1024
-                print(f"  Downloaded: {output_path} ({size_kb}KB)", file=sys.stderr)
+                print(f"Downloading result from R2...", file=sys.stderr)
+            downloaded = download_from_r2(output_r2_key, output_path)
+            if downloaded:
+                r2_keys_to_cleanup.append(output_r2_key)
+                if verbose:
+                    size_kb = Path(output_path).stat().st_size // 1024
+                    print(f"  Downloaded: {output_path} ({size_kb}KB)", file=sys.stderr)
 
-    if not downloaded and output_url:
-        downloaded = download_from_url(output_url, output_path, verbose=verbose)
+        if not downloaded and output_url:
+            downloaded = download_from_url(output_url, output_path, verbose=verbose)
+            # Same object the r2_key names -- register it however we fetched it.
+            if downloaded and output_r2_key:
+                r2_keys_to_cleanup.append(output_r2_key)
 
-    if not downloaded:
-        return {"error": f"No output_url or r2_key in result: {result}"}
+        if not downloaded:
+            return {"error": f"No output_url or r2_key in result: {result}"}
 
-    # Cleanup R2 objects
-    for key in r2_keys_to_cleanup:
-        delete_from_r2(key)
-
-    return {
-        "success": True,
-        "output": output_path,
-        "processing_time_seconds": round(elapsed, 2),
-        "cloud_output": result,
-    }
+        return {
+            "success": True,
+            "output": output_path,
+            "processing_time_seconds": round(elapsed, 2),
+            "cloud_output": result,
+        }
 
 
 # =============================================================================
@@ -443,7 +442,7 @@ def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> dict:
             print(f"Endpoint ID:  {result['endpoint_id']}")
             print()
             print("You can now run:")
-            print("  python tools/upscale.py --input image.jpg --output upscaled.png --runpod")
+            print("  uv run tools/upscale.py --input image.jpg --output upscaled.png --runpod")
             print()
 
     except Exception as e:
@@ -461,16 +460,16 @@ def parse_args():
         epilog="""
 Examples:
   # Upscale image 4x using cloud GPU
-  python tools/upscale.py --input photo.jpg --output photo_4x.png --cloud runpod
+  uv run tools/upscale.py --input photo.jpg --output photo_4x.png --cloud runpod
 
   # Use anime model for illustrations
-  python tools/upscale.py --input art.png --output art_4x.png --model anime --cloud runpod
+  uv run tools/upscale.py --input art.png --output art_4x.png --model anime --cloud runpod
 
   # With face enhancement
-  python tools/upscale.py --input portrait.jpg --output portrait_4x.png --face-enhance --cloud runpod
+  uv run tools/upscale.py --input portrait.jpg --output portrait_4x.png --face-enhance --cloud runpod
 
   # Setup RunPod endpoint (first-time)
-  python tools/upscale.py --setup
+  uv run tools/upscale.py --setup
         """,
     )
 

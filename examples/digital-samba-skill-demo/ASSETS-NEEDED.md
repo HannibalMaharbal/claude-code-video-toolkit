@@ -9,6 +9,23 @@ To run this example, you'll need to create these media assets.
 | `remotion/public/demos/skill-install.mp4` | ~15s | Claude Code skill installation | Convert `assets/claude-code-install.gif` with FFmpeg |
 | `remotion/public/demos/app-walkthrough.mp4` | ~35s | Browser walkthrough of demo app | `/record-demo` or Playwright |
 | `remotion/public/narrator.mp4` | ~2:30 | Optional narrator PiP video | Record yourself speaking the script |
+| `remotion/public/demos/build-app.mp4` | ~30s | Terminal recording of the app being built | Record with asciinema, convert (below) |
+
+### Terminal Build Recording
+
+VIDEO-SPEC.md refers to a `build-app.cast` recorded against the demo app repo
+(`digital-samba-interview-room-demo`). It is not shipped with this example — record
+your own and convert it:
+
+```bash
+asciinema rec build-app.cast          # run the build, then exit
+agg build-app.cast build-app.gif      # asciinema/agg
+ffmpeg -i build-app.gif \
+  -movflags faststart \
+  -pix_fmt yuv420p \
+  -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+  remotion/public/demos/build-app.mp4
+```
 
 ### GIF Conversion Command
 
@@ -38,13 +55,13 @@ Recording specs: 1920x1080, 30fps
 | File | Duration | Description | How to Create |
 |------|----------|-------------|---------------|
 | `remotion/public/audio/voiceover.mp3` | ~2:30 | Narration from VOICEOVER-SCRIPT.md | `/generate-voiceover` |
-| `remotion/public/audio/background-music.mp3` | ~3:00 | Subtle tech ambient | `python tools/music.py` |
+| `remotion/public/audio/background-music.mp3` | ~3:00 | Subtle tech ambient | `uv run tools/music.py` |
 
 ### Voiceover Generation
 
 ```bash
 cd /path/to/toolkit
-python tools/voiceover.py \
+uv run tools/voiceover.py \
   --script examples/digital-samba-skill-demo/VOICEOVER-SCRIPT.md \
   --output examples/digital-samba-skill-demo/remotion/public/audio/voiceover.mp3
 ```
@@ -52,7 +69,7 @@ python tools/voiceover.py \
 ### Background Music Generation
 
 ```bash
-python tools/music.py \
+uv run tools/music.py \
   --prompt "subtle tech ambient, modern, clean" \
   --duration 180 \
   --output examples/digital-samba-skill-demo/remotion/public/audio/background-music.mp3

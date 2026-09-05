@@ -14,7 +14,7 @@ Verify the environment is ready:
 1. Check .env for RUNPOD_API_KEY
    - If missing: "Add `RUNPOD_API_KEY=your_key` to `.env`"
 2. Check .env for RUNPOD_QWEN3_TTS_ENDPOINT_ID
-   - If missing and API key exists: offer to run `python3 tools/qwen3_tts.py --setup`
+   - If missing and API key exists: offer to run `uv run tools/qwen3_tts.py --setup`
    - If API key also missing: guide user to add it first
 3. Only proceed once both are confirmed
 ```
@@ -45,14 +45,15 @@ If the selected brand already has a clone profile, show the existing config and 
 
 ## Step 3: Record or Provide Reference Audio
 
-Present a reference script for the user to read aloud. The script should be ~10-15 seconds and include varied intonation:
+Present a reference script for the user to read aloud. The script should be ~15-20 seconds and include varied intonation:
 
 ```
-Suggested script to read aloud (~12 seconds):
+Suggested script to read aloud (~15 seconds):
 
   "Welcome to this video walkthrough. Today we'll explore some exciting
    new features — including improved performance, better accessibility,
-   and a redesigned dashboard. Let's get started!"
+   and a redesigned dashboard. There's a lot to cover, so let's take it
+   step by step and get started!"
 
 Options:
   1. I'll record this script (provide the file path when ready)
@@ -60,10 +61,26 @@ Options:
   3. Use an existing file (enter path)
 ```
 
+**Read it at the pace you want the clone to narrate at.** The clone inherits
+its speaking rate from the reference, and temperature/regeneration cannot
+correct pace afterwards — a short, snappy reference reliably produces rushed
+(170-210 wpm) narration on every take.
+
 Once the user provides the audio file:
 1. Verify the file exists and is a supported format (wav, mp3, m4a, flac, ogg)
-2. Copy it to `brands/{name}/assets/voice-reference.{ext}`
-3. Confirm the copy
+2. **Validate the reference** before accepting it:
+   ```bash
+   ffprobe -v error -show_entries format=duration -of csv=p=0 REFERENCE_FILE
+   ```
+   - Duration **< 8s**: warn strongly — too little prosody to anchor pace or
+     tone; the clone will sound rushed and flat. Recommend re-recording.
+   - Duration **8-12s**: usable, but suggest a longer take if convenient.
+   - Duration **12-25s**: ideal.
+   - Also sanity-check content: fewer than ~25 words of varied, full-sentence
+     speech (e.g. a repeated short phrase like "Thank you. Thank you.") gives
+     the model no narration pacing to copy — warn and offer to proceed anyway.
+3. Copy it to `brands/{name}/assets/voice-reference.{ext}`
+4. Confirm the copy
 
 ## Step 4: Transcript
 
@@ -86,7 +103,7 @@ The transcript must match what was actually said — this is critical for clone 
 Generate a test clip using the reference audio:
 
 ```bash
-python3 tools/qwen3_tts.py \
+uv run tools/qwen3_tts.py \
   --text "This is a test of the cloned voice. It should sound natural and similar to the original recording." \
   --ref-audio brands/{name}/assets/voice-reference.{ext} \
   --ref-text "TRANSCRIPT_HERE" \
@@ -157,10 +174,10 @@ Voice clone saved to: brands/{name}/voice.json
 Usage:
 
   # Per-scene voiceover with cloned voice
-  python3 tools/voiceover.py --provider qwen3 --brand {name} --scene-dir public/audio/scenes --json
+  uv run tools/voiceover.py --provider qwen3 --brand {name} --scene-dir public/audio/scenes --json
 
   # Single file
-  python3 tools/voiceover.py --provider qwen3 --brand {name} --script script.txt --output out.mp3
+  uv run tools/voiceover.py --provider qwen3 --brand {name} --script script.txt --output out.mp3
 
   # In /generate-voiceover, select Qwen3-TTS — the clone profile will be detected automatically.
 
@@ -182,8 +199,9 @@ automatically whenever you use --brand {name} with --provider qwen3.
 Share these with the user:
 
 - **Recording quality matters** — use a quiet room, consistent mic distance
-- **10-15 seconds** of reference audio is ideal (too short = poor quality, too long = diminishing returns)
-- **Varied intonation** helps — include questions, emphasis, and natural pauses
+- **12-25 seconds** of reference audio is ideal (too short = poor quality + rushed pace, too long = diminishing returns)
+- **The clone copies your pace** — read the reference at narration speed; rushed or punchy references produce rushed clones, and no generation setting fixes it afterwards (use `--max-wpm 165` on voiceover.py/qwen3_tts.py as a deterministic safety net)
+- **Varied intonation** helps — include questions, emphasis, and natural pauses; avoid repeating one short phrase
 - **Transcript accuracy** is critical — must match the audio exactly
 - **Supported formats:** wav, mp3, m4a, flac, ogg (wav or m4a preferred)
 

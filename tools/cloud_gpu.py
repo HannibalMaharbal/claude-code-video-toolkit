@@ -8,6 +8,7 @@ Supported providers:
 - runpod: RunPod serverless endpoints (existing)
 - modal: Modal web endpoints (new)
 """
+from __future__ import annotations
 
 import json as _json
 import os
@@ -44,6 +45,7 @@ _MODAL_ENV_VARS = {
     "music_gen": "MODAL_MUSIC_GEN_ENDPOINT_URL",
     "dewatermark": "MODAL_DEWATERMARK_ENDPOINT_URL",
     "ltx2": "MODAL_LTX2_ENDPOINT_URL",
+    "soulx": "MODAL_SOULX_ENDPOINT_URL",
 }
 
 
@@ -186,6 +188,7 @@ _TOOL_GPU = {
         "music_gen": "A10G",
         "dewatermark": "A10G",
         "ltx2": "A100-80GB",
+        "soulx": "A10G",
     },
     "runpod": {
         "qwen3_tts": "ADA_24",

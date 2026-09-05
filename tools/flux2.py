@@ -11,25 +11,26 @@ Capabilities:
 
 Examples:
   # Text-to-image generation
-  python tools/flux2.py --prompt "A sunset over mountains, oil painting style"
+  uv run tools/flux2.py --prompt "A sunset over mountains, oil painting style"
 
   # Scene presets for video production
-  python tools/flux2.py --preset title-bg
-  python tools/flux2.py --preset problem --prompt "legacy API migration"
-  python tools/flux2.py --preset cta --brand digital-samba
+  uv run tools/flux2.py --preset title-bg
+  uv run tools/flux2.py --preset problem --prompt "legacy API migration"
+  uv run tools/flux2.py --preset cta --brand digital-samba
 
   # With custom size and seed
-  python tools/flux2.py --prompt "A cat in a spacesuit" --width 1280 --height 720 --seed 42
+  uv run tools/flux2.py --prompt "A cat in a spacesuit" --width 1280 --height 720 --seed 42
 
   # Image editing (pass reference image)
-  python tools/flux2.py --input photo.jpg --prompt "Add a party hat"
+  uv run tools/flux2.py --input photo.jpg --prompt "Add a party hat"
 
   # List available presets
-  python tools/flux2.py --list-presets
+  uv run tools/flux2.py --list-presets
 
   # Setup RunPod endpoint (first-time)
-  python tools/flux2.py --setup
+  uv run tools/flux2.py --setup
 """
+from __future__ import annotations
 
 import argparse
 import base64
@@ -46,13 +47,13 @@ try:
     from dotenv import load_dotenv
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Install with: pip install requests Pillow python-dotenv")
+    print("Install with: uv sync")
     sys.exit(1)
 
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent))
-from file_transfer import download_from_url, get_r2_payload_config
+from file_transfer import delete_from_r2, download_from_url, get_r2_payload_config
 
 
 RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
@@ -376,7 +377,11 @@ def generate_image(
 
     if "output_url" in result:
         log("Downloading from R2...", "dim")
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     else:
         decode_and_save(result["image_base64"], output_path)
 
@@ -474,7 +479,11 @@ def edit_image(
 
     if "output_url" in result:
         log("Downloading from R2...", "dim")
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     else:
         decode_and_save(result["image_base64"], output_path)
 
@@ -786,8 +795,8 @@ def setup_runpod(gpu_id: str = "AMPERE_24,ADA_24", verbose: bool = True) -> dict
             print(f"Endpoint ID:  {result['endpoint_id']}")
             print()
             print("You can now run:")
-            print('  python tools/flux2.py --prompt "A cat in a spacesuit"')
-            print('  python tools/flux2.py --input photo.jpg --prompt "Add sunglasses"')
+            print('  uv run tools/flux2.py --prompt "A cat in a spacesuit"')
+            print('  uv run tools/flux2.py --input photo.jpg --prompt "Add sunglasses"')
             print()
 
     except Exception as e:

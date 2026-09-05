@@ -7,43 +7,44 @@ Cloud providers: RunPod (default), Modal.
 
 Usage:
     # Built-in speaker (RunPod, default)
-    python tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3
+    uv run tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3
 
     # Using Modal instead of RunPod
-    python tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3
+    uv run tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3
 
     # With tone preset
-    python tools/qwen3_tts.py --text "Hello world" --tone warm --output hello.mp3
+    uv run tools/qwen3_tts.py --text "Hello world" --tone warm --output hello.mp3
 
     # With custom emotion/style instruction (overrides --tone)
-    python tools/qwen3_tts.py --text "I'm so excited!" --instruct "Speak enthusiastically" --output excited.mp3
+    uv run tools/qwen3_tts.py --text "I'm so excited!" --instruct "Speak enthusiastically" --output excited.mp3
 
     # List tone presets
-    python tools/qwen3_tts.py --list-tones
+    uv run tools/qwen3_tts.py --list-tones
 
     # Voice cloning
-    python tools/qwen3_tts.py --text "Hello" --ref-audio sample.wav --ref-text "transcript" --output cloned.mp3
+    uv run tools/qwen3_tts.py --text "Hello" --ref-audio sample.wav --ref-text "transcript" --output cloned.mp3
 
     # List built-in voices
-    python tools/qwen3_tts.py --list-voices
+    uv run tools/qwen3_tts.py --list-voices
 
     # Setup endpoint (RunPod)
-    python tools/qwen3_tts.py --setup
+    uv run tools/qwen3_tts.py --setup
 
     # Setup endpoint (Modal)
-    python tools/qwen3_tts.py --setup --cloud modal
+    uv run tools/qwen3_tts.py --setup --cloud modal
 
 Setup:
     RunPod:
         1. Create account at runpod.io
-        2. Run: python tools/qwen3_tts.py --setup
+        2. Run: uv run tools/qwen3_tts.py --setup
         3. Or manually deploy docker/runpod-qwen3-tts/ and add endpoint ID to .env
 
     Modal:
-        1. pip install modal && python3 -m modal setup
-        2. Run: python tools/qwen3_tts.py --setup --cloud modal
+        1. uv sync --extra modal && uv run modal setup
+        2. Run: uv run tools/qwen3_tts.py --setup --cloud modal
         3. Or manually: modal deploy docker/modal-qwen3-tts/app.py
 """
+from __future__ import annotations
 
 import argparse
 import base64
@@ -109,7 +110,7 @@ def resolve_tone(tone: str | None, instruct: str) -> str:
 
 
 from file_transfer import (
-    upload_to_storage, download_from_r2, delete_from_r2,
+    upload_to_storage, download_from_r2, r2_cleanup,
     download_from_url, get_r2_payload_config,
 )
 
@@ -137,13 +138,14 @@ def get_audio_duration(file_path: str) -> float | None:
 
 
 def generate_audio(
-    text: str,
-    output_path: str,
+    text,                       # str OR list[str] for batch
+    output_path,                # str OR list[str] (same shape as text)
     speaker: str = "Ryan",
-    language: str = "Auto",
+    language="Auto",            # str OR list[str] (broadcasts if scalar)
     instruct: str = "",
     ref_audio: str | None = None,
     ref_text: str | None = None,
+    design_instruct: str | None = None,   # if set → mode=voice_design
     output_format: str = "mp3",
     timeout: int = 300,
     verbose: bool = True,
@@ -151,140 +153,242 @@ def generate_audio(
     top_p: float | None = None,
     cloud: str = "modal",
     progress=None,
+    max_wpm: float | None = None,
 ) -> dict:
     """Generate audio using Qwen3-TTS via cloud GPU.
 
-    This is the main entry point, importable by voiceover.py.
-    Returns dict with: success, output, duration_seconds, duration_frames_30fps
+    Supports three modes:
+      - custom_voice (default): built-in speaker + instruct
+      - clone: set ref_audio + ref_text
+      - voice_design: set design_instruct (brief) + text (seed sentence)
 
-    Args:
-        cloud: Cloud provider — "modal" (default) or "runpod".
+    Batch mode: pass `text` as a list of strings and `output_path` as a
+    matching list. The handler reuses a single voice_clone_prompt across
+    all utterances for consistent voice (proper Qwen3-TTS pattern).
+
+    Pacing QC: every result includes `wpm` (words per minute) and a `pacing`
+    label ('fast'/'slow'/'ok'/None). If `max_wpm` is set, takes that exceed
+    it are slowed in place with pitch-preserving ffmpeg atempo (floor 0.85x)
+    — cloned voices inherit pace from their reference and resist temperature,
+    so deterministic correction beats regenerating. See tools/pacing.py.
+
+    Returns dict with:
+      single call: {success, output, duration_seconds, duration_frames_30fps, wpm, pacing}
+      batch call:  {success, outputs: [{output, duration_seconds, ...}, ...]}
     """
     start_time = time.time()
-    r2_keys_to_cleanup = []
+    with r2_cleanup() as r2_keys_to_cleanup:
+        # Normalize inputs
+        is_batch = isinstance(text, list)
+        texts = text if is_batch else [text]
+        out_paths = output_path if is_batch else [output_path]
+        if len(out_paths) != len(texts):
+            return {"success": False, "error": "text and output_path must have matching lengths"}
+        if any(not t for t in texts):
+            return {"success": False, "error": "all texts must be non-empty strings"}
 
-    # Get R2 config (used for file transfer regardless of cloud provider)
-    r2_payload = get_r2_payload_config()
+        # Get R2 config (used for file transfer regardless of cloud provider)
+        r2_payload = get_r2_payload_config()
 
-    # Determine mode
-    mode = "clone" if ref_audio else "custom_voice"
-
-    # Upload reference audio for clone mode
-    ref_audio_url = None
-    if mode == "clone":
-        if not Path(ref_audio).exists():
-            return {"success": False, "error": f"Reference audio not found: {ref_audio}"}
-        if not ref_text:
-            return {"success": False, "error": "ref_text is required for voice cloning"}
-
-        ref_audio_url, ref_r2_key = upload_to_storage(ref_audio, "qwen3-tts/input")
-        if not ref_audio_url:
-            return {"success": False, "error": "Failed to upload reference audio"}
-        if ref_r2_key:
-            r2_keys_to_cleanup.append(ref_r2_key)
-
-    if verbose:
-        print(f"Cloud provider: {cloud}", file=sys.stderr)
-        if mode == "clone":
-            print(f"Mode: voice clone", file=sys.stderr)
+        # Determine mode
+        if design_instruct is not None:
+            if is_batch:
+                return {"success": False, "error": "voice_design mode expects a single seed text, not a batch"}
+            mode = "voice_design"
+        elif ref_audio:
+            mode = "clone"
         else:
-            print(f"Speaker: {speaker}, Language: {language}", file=sys.stderr)
+            mode = "custom_voice"
 
-    # Build payload (same format for both providers)
-    payload = {
-        "input": {
-            "text": text,
-            "mode": mode,
-            "language": language,
-            "output_format": output_format,
-        }
-    }
+        # Upload reference audio for clone mode
+        ref_audio_url = None
+        if mode == "clone":
+            if not Path(ref_audio).exists():
+                return {"success": False, "error": f"Reference audio not found: {ref_audio}"}
+            if not ref_text:
+                return {"success": False, "error": "ref_text is required for voice cloning"}
 
-    if mode == "clone":
-        payload["input"]["ref_audio_url"] = ref_audio_url
-        payload["input"]["ref_text"] = ref_text
-    else:
-        payload["input"]["speaker"] = speaker
-        if instruct:
-            payload["input"]["instruct"] = instruct
+            ref_audio_url, ref_r2_key = upload_to_storage(ref_audio, "qwen3-tts/input")
+            if not ref_audio_url:
+                return {"success": False, "error": "Failed to upload reference audio"}
+            if ref_r2_key:
+                r2_keys_to_cleanup.append(ref_r2_key)
 
-    if temperature is not None:
-        payload["input"]["temperature"] = temperature
-    if top_p is not None:
-        payload["input"]["top_p"] = top_p
-
-    if r2_payload:
-        payload["input"]["r2"] = r2_payload
-
-    # Submit job via cloud_gpu abstraction
-    try:
-        from cloud_gpu import call_cloud_endpoint
-    except ImportError:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from cloud_gpu import call_cloud_endpoint
-
-    output, elapsed = call_cloud_endpoint(
-        provider=cloud,
-        payload=payload,
-        tool_name="qwen3_tts",
-        timeout=timeout,
-        poll_interval=3,
-        progress_label="Generating speech",
-        verbose=verbose,
-        progress=progress,
-    )
-
-    if isinstance(output, dict) and output.get("error"):
-        return {"success": False, "error": output["error"]}
-
-    # Download result
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    downloaded = False
-
-    output_r2_key = output.get("r2_key") if isinstance(output, dict) else None
-    output_url = output.get("audio_url") if isinstance(output, dict) else None
-
-    if output_r2_key:
         if verbose:
-            print(f"Downloading result from R2...", file=sys.stderr)
-        downloaded = download_from_r2(output_r2_key, output_path)
-        if downloaded:
-            r2_keys_to_cleanup.append(output_r2_key)
-            if verbose:
-                size_kb = Path(output_path).stat().st_size // 1024
-                print(f"  Downloaded: {output_path} ({size_kb}KB)", file=sys.stderr)
+            print(f"Cloud provider: {cloud}", file=sys.stderr)
+            if mode == "clone":
+                print(f"Mode: voice clone ({len(texts)} utterance{'s' if len(texts) > 1 else ''}, shared prompt)", file=sys.stderr)
+            elif mode == "voice_design":
+                print(f"Mode: voice design (instruct={design_instruct[:60]!r}...)", file=sys.stderr)
+            else:
+                print(f"Speaker: {speaker}, Language: {language}, mode: custom_voice", file=sys.stderr)
 
-    if not downloaded and output_url:
-        downloaded = download_from_url(output_url, output_path, verbose=verbose)
+        # Build payload (same format for both providers)
+        payload = {
+            "input": {
+                "text": texts if is_batch else texts[0],
+                "mode": mode,
+                "language": language,
+                "output_format": output_format,
+            }
+        }
 
-    if not downloaded:
-        audio_base64 = output.get("audio_base64")
-        if audio_base64:
-            Path(output_path).write_bytes(base64.b64decode(audio_base64))
-            downloaded = True
-            if verbose:
-                size_kb = Path(output_path).stat().st_size // 1024
-                print(f"  Decoded from base64: {output_path} ({size_kb}KB)", file=sys.stderr)
+        if mode == "clone":
+            payload["input"]["ref_audio_url"] = ref_audio_url
+            payload["input"]["ref_text"] = ref_text
+        elif mode == "voice_design":
+            payload["input"]["instruct"] = design_instruct
+        else:
+            payload["input"]["speaker"] = speaker
+            if instruct:
+                payload["input"]["instruct"] = instruct
 
-    if not downloaded:
-        return {"success": False, "error": f"No audio in result: {list(output.keys()) if isinstance(output, dict) else output}"}
+        if temperature is not None:
+            payload["input"]["temperature"] = temperature
+        if top_p is not None:
+            payload["input"]["top_p"] = top_p
 
-    # Cleanup R2 objects
-    for key in r2_keys_to_cleanup:
-        delete_from_r2(key)
+        if r2_payload:
+            payload["input"]["r2"] = r2_payload
 
-    duration = get_audio_duration(output_path)
+        # Submit job via cloud_gpu abstraction
+        try:
+            from cloud_gpu import call_cloud_endpoint
+        except ImportError:
+            sys.path.insert(0, str(Path(__file__).parent))
+            from cloud_gpu import call_cloud_endpoint
 
-    result_dict = {
-        "success": True,
-        "output": output_path,
-        "script_chars": len(text),
-    }
-    if duration:
-        result_dict["duration_seconds"] = round(duration, 2)
-        result_dict["duration_frames_30fps"] = int(duration * 30)
+        progress_label = (
+            f"Designing voice" if mode == "voice_design"
+            else (f"Generating {len(texts)} utterances" if is_batch else "Generating speech")
+        )
+        # Batch calls can be longer-running; scale timeout by count
+        effective_timeout = timeout * max(1, len(texts) // 3 + 1)
 
-    return result_dict
+        output, elapsed = call_cloud_endpoint(
+            provider=cloud,
+            payload=payload,
+            tool_name="qwen3_tts",
+            timeout=effective_timeout,
+            poll_interval=3,
+            progress_label=progress_label,
+            verbose=verbose,
+            progress=progress,
+        )
+
+        if isinstance(output, dict) and output.get("error"):
+            return {"success": False, "error": output["error"]}
+
+        # Parse response — handler returns `outputs: [...]` always; legacy top-level
+        # keys also present when input was single-text. Use `outputs` uniformly.
+        outputs_list = None
+        if isinstance(output, dict):
+            if isinstance(output.get("outputs"), list):
+                outputs_list = output["outputs"]
+            else:
+                # Pre-v0.2 handler or single-shot legacy response — synthesize a
+                # one-item list from top-level keys.
+                legacy_item = {
+                    k: output[k] for k in ("audio_url", "r2_key", "audio_base64", "duration_seconds")
+                    if k in output
+                }
+                if legacy_item:
+                    outputs_list = [legacy_item]
+
+        if not outputs_list or len(outputs_list) != len(texts):
+            return {
+                "success": False,
+                "error": f"Expected {len(texts)} output(s), got {len(outputs_list) if outputs_list else 0}: "
+                         f"{list(output.keys()) if isinstance(output, dict) else output}",
+            }
+
+        # Download all outputs
+        downloaded_items = []
+        for i, (item, dest_path) in enumerate(zip(outputs_list, out_paths)):
+            Path(dest_path).parent.mkdir(parents=True, exist_ok=True)
+            downloaded = False
+
+            r2_key = item.get("r2_key")
+            url = item.get("audio_url")
+
+            if r2_key:
+                if verbose:
+                    print(f"Downloading output {i+1}/{len(outputs_list)} from R2...", file=sys.stderr)
+                downloaded = download_from_r2(r2_key, dest_path)
+                if downloaded:
+                    r2_keys_to_cleanup.append(r2_key)
+                    if verbose:
+                        size_kb = Path(dest_path).stat().st_size // 1024
+                        print(f"  Downloaded: {dest_path} ({size_kb}KB)", file=sys.stderr)
+
+            if not downloaded and url:
+                downloaded = download_from_url(url, dest_path, verbose=verbose)
+                # Same object the r2_key names -- register it however we fetched it.
+                if downloaded and r2_key:
+                    r2_keys_to_cleanup.append(r2_key)
+
+            if not downloaded:
+                audio_base64 = item.get("audio_base64")
+                if audio_base64:
+                    Path(dest_path).write_bytes(base64.b64decode(audio_base64))
+                    downloaded = True
+                    if verbose:
+                        size_kb = Path(dest_path).stat().st_size // 1024
+                        print(f"  Decoded from base64: {dest_path} ({size_kb}KB)", file=sys.stderr)
+
+            if not downloaded:
+                return {"success": False, "error": f"No audio in output[{i}]: {list(item.keys())}"}
+
+            duration = get_audio_duration(dest_path)
+            item_result = {
+                "output": dest_path,
+                "duration_seconds": round(duration, 2) if duration else None,
+                "duration_frames_30fps": int(duration * 30) if duration else None,
+                "script_chars": len(texts[i]),
+            }
+
+            # Pacing QC (voice_design seed sentences are auditions, not narration)
+            if mode != "voice_design":
+                from pacing import clamp_pace, pace_label
+                if max_wpm:
+                    clamp = clamp_pace(dest_path, texts[i], max_wpm, verbose=verbose)
+                    if clamp.get("applied"):
+                        new_dur = clamp["duration_seconds"]
+                        item_result["duration_seconds"] = new_dur
+                        item_result["duration_frames_30fps"] = (
+                            int(new_dur * 30) if new_dur else None
+                        )
+                        item_result["pace_adjusted"] = {
+                            "original_wpm": clamp["original_wpm"],
+                            "atempo": clamp["atempo"],
+                        }
+                    elif clamp.get("error") and verbose:
+                        print(f"  Pace clamp skipped: {clamp['error']}", file=sys.stderr)
+                wpm, label = pace_label(texts[i], item_result["duration_seconds"])
+                item_result["wpm"] = wpm
+                item_result["pacing"] = label
+                if verbose and label in ("fast", "slow"):
+                    print(
+                        f"  Pacing warning: {Path(dest_path).name} is {wpm:.0f} wpm "
+                        f"({label}; comfortable narration is 140-160). "
+                        "Consider --max-wpm to auto-correct.",
+                        file=sys.stderr,
+                    )
+
+            downloaded_items.append(item_result)
+
+        if is_batch:
+            return {
+                "success": True,
+                "outputs": downloaded_items,
+                "mode": mode,
+            }
+        else:
+            return {
+                "success": True,
+                **downloaded_items[0],
+                "mode": mode,
+            }
 
 
 # =============================================================================
@@ -587,7 +691,7 @@ def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> dict:
             print(f"Endpoint ID:  {result['endpoint_id']}")
             print()
             print("You can now run:")
-            print('  python tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3')
+            print('  uv run tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3')
             print()
 
     except Exception as e:
@@ -606,7 +710,7 @@ def setup_modal(verbose: bool = True) -> dict:
     """Set up Modal endpoint for Qwen3-TTS.
 
     Deploys the Modal app and saves the endpoint URL to .env.
-    Requires: pip install modal && python3 -m modal setup
+    Requires: uv sync --extra modal && uv run modal setup
     """
     import shutil
     import subprocess
@@ -626,8 +730,8 @@ def setup_modal(verbose: bool = True) -> dict:
     if not shutil.which("modal"):
         result["error"] = (
             "Modal CLI not found. Install with:\n"
-            "  pip install modal\n"
-            "  python3 -m modal setup"
+            "  uv sync --extra modal\n"
+            "  uv run modal setup"
         )
         if verbose:
             print(f"Error: {result['error']}", file=sys.stderr)
@@ -689,7 +793,7 @@ def setup_modal(verbose: bool = True) -> dict:
         if not endpoint_url:
             result["error"] = (
                 "Deploy succeeded but could not parse endpoint URL from output.\n"
-                "Check `modal app list` for the URL and add to .env manually:\n"
+                "Check `uv run modal app list` for the URL and add to .env manually:\n"
                 "  MODAL_QWEN3_TTS_ENDPOINT_URL=https://your-workspace--video-toolkit-qwen3-tts-qwen3tts-generate.modal.run"
             )
             if verbose:
@@ -738,7 +842,7 @@ def setup_modal(verbose: bool = True) -> dict:
             print(f"Endpoint: {endpoint_url}")
             print()
             print("You can now run:")
-            print('  python tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3')
+            print('  uv run tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3')
             print()
 
     except subprocess.TimeoutExpired:
@@ -760,25 +864,25 @@ def parse_args():
         epilog="""
 Examples:
   # Built-in speaker (RunPod, default)
-  python tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3
+  uv run tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3
 
   # Using Modal instead
-  python tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3
+  uv run tools/qwen3_tts.py --text "Hello world" --cloud modal --output hello.mp3
 
   # With emotion control
-  python tools/qwen3_tts.py --text "Great news!" --instruct "Speak enthusiastically" --output excited.mp3
+  uv run tools/qwen3_tts.py --text "Great news!" --instruct "Speak enthusiastically" --output excited.mp3
 
   # Voice cloning
-  python tools/qwen3_tts.py --text "Hello" --ref-audio sample.wav --ref-text "transcript" --output cloned.mp3
+  uv run tools/qwen3_tts.py --text "Hello" --ref-audio sample.wav --ref-text "transcript" --output cloned.mp3
 
   # List voices
-  python tools/qwen3_tts.py --list-voices
+  uv run tools/qwen3_tts.py --list-voices
 
   # Setup endpoint (RunPod)
-  python tools/qwen3_tts.py --setup
+  uv run tools/qwen3_tts.py --setup
 
   # Setup endpoint (Modal)
-  python tools/qwen3_tts.py --setup --cloud modal
+  uv run tools/qwen3_tts.py --setup --cloud modal
         """,
     )
 
@@ -829,6 +933,16 @@ Examples:
         help="Transcript of reference audio (required with --ref-audio)",
     )
 
+    # Voice design — generate a new character voice from a natural-language brief.
+    # Produces a designed .wav that can be re-used as a clone reference.
+    parser.add_argument(
+        "--design-instruct",
+        type=str,
+        help="Character brief for voice design mode (e.g. 'Unhurried Irish "
+             "craftsman, late 50s, baritone'). With --text as seed sentence, "
+             "writes a designed-voice WAV to --output.",
+    )
+
     # Output format
     parser.add_argument(
         "--format",
@@ -851,6 +965,14 @@ Examples:
     )
 
     # Cloud GPU options
+    parser.add_argument(
+        "--max-wpm",
+        type=float,
+        default=None,
+        help="Pace clamp: if the take exceeds this words-per-minute, slow it "
+             "with pitch-preserving atempo (floor 0.85x). Try 165. Cloned "
+             "voices inherit pace from the reference and resist temperature.",
+    )
     parser.add_argument(
         "--cloud",
         type=str,
@@ -971,6 +1093,11 @@ def main():
         print(f"Error: Reference audio not found: {args.ref_audio}", file=sys.stderr)
         sys.exit(1)
 
+    # Mode conflict checks
+    if args.design_instruct and args.ref_audio:
+        print("Error: --design-instruct and --ref-audio are mutually exclusive", file=sys.stderr)
+        sys.exit(1)
+
     # Capitalize language for API
     language = args.language.capitalize()
 
@@ -982,15 +1109,18 @@ def main():
         print(
             "Note: --tone/--instruct is ignored when using a cloned voice.\n"
             "  The clone's tone comes from your reference recording.\n"
-            "  Tip: Record a new reference with the tone you want.",
+            "  Tip: Use --design-instruct to create a designed reference instead.",
             file=sys.stderr,
         )
         instruct = ""
 
     if verbose:
-        print("Generating speech with Qwen3-TTS...")
-        if instruct:
-            print(f"  Tone: {instruct}")
+        if args.design_instruct:
+            print("Designing voice with Qwen3-TTS VoiceDesign...")
+        else:
+            print("Generating speech with Qwen3-TTS...")
+            if instruct:
+                print(f"  Tone: {instruct}")
 
     result = generate_audio(
         text=args.text,
@@ -1000,6 +1130,7 @@ def main():
         instruct=instruct,
         ref_audio=args.ref_audio,
         ref_text=args.ref_text,
+        design_instruct=args.design_instruct,
         output_format=args.format,
         timeout=args.timeout,
         verbose=verbose,
@@ -1007,6 +1138,7 @@ def main():
         top_p=args.top_p,
         cloud=args.cloud,
         progress=reporter,
+        max_wpm=args.max_wpm,
     )
 
     if not result.get("success"):
@@ -1022,7 +1154,8 @@ def main():
         duration = result.get("duration_seconds", 0)
         print(f"Generated: {result['output']}")
         if duration:
-            print(f"  Duration: {duration:.1f}s ({int(duration * 30)} frames @ 30fps)")
+            wpm_note = f", {result['wpm']:.0f} wpm" if result.get("wpm") else ""
+            print(f"  Duration: {duration:.1f}s ({int(duration * 30)} frames @ 30fps{wpm_note})")
 
 
 if __name__ == "__main__":

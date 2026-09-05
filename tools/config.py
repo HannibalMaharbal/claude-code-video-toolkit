@@ -1,4 +1,5 @@
 """Shared configuration for video toolkit tools."""
+from __future__ import annotations
 
 import json
 import os
@@ -61,6 +62,30 @@ def get_elevenlabs_api_key() -> str | None:
     return os.getenv("ELEVENLABS_API_KEY")
 
 
+def get_sixtydb_api_key() -> str | None:
+    """Get 60db API key from environment."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    return os.getenv("SIXTYDB_API_KEY")
+
+
+def get_sixtydb_voice_id() -> str | None:
+    """Get the 60db voice ID from env var, falling back to the registry.
+
+    Returns None if neither is set — callers fall back to the documented
+    60db default voice.
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    voice_id = os.getenv("SIXTYDB_VOICE_ID")
+    if voice_id and voice_id != "your_voice_id_here":
+        return voice_id
+
+    registry = load_registry()
+    return registry.get("config", {}).get("sixtydbVoiceId")
+
+
 def get_default_output_dir(project_path: str | None = None) -> Path:
     """Get default audio output directory for a project."""
     if project_path:
@@ -74,6 +99,41 @@ def get_acemusic_api_key() -> str | None:
 
     load_dotenv()
     return os.getenv("ACEMUSIC_API_KEY")
+
+
+def get_ideogram_api_key() -> str | None:
+    """Get Ideogram (hosted v4 API) key from environment."""
+    from dotenv import load_dotenv
+    load_dotenv()
+    return os.getenv("IDEOGRAM_API_KEY")
+
+
+def get_youtube_client_secrets_file() -> str | None:
+    """Path to the OAuth 2.0 'Desktop app' client_secret JSON used for YouTube uploads.
+
+    Returns None if unset or still the placeholder. YouTube uploads use OAuth (acting
+    on behalf of a channel), not an API key — see docs/youtube-upload.md.
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+    path = os.getenv("YOUTUBE_CLIENT_SECRETS_FILE")
+    if path and path != "/absolute/path/to/client_secret.json":
+        return path
+    return None
+
+
+def get_youtube_token_dir() -> Path:
+    """Directory holding per-account cached OAuth tokens for YouTube.
+
+    Override via YOUTUBE_TOKEN_DIR. Default: <workspace>/_internal/.youtube/
+    (must be gitignored — refresh tokens are long-lived secrets).
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+    override = os.getenv("YOUTUBE_TOKEN_DIR")
+    if override:
+        return Path(override)
+    return find_workspace_root() / "_internal" / ".youtube"
 
 
 def get_runpod_api_key() -> str | None:
@@ -104,7 +164,7 @@ def get_modal_token() -> tuple[str | None, str | None]:
     """Get Modal authentication token from environment.
 
     Returns (token_id, token_secret) tuple. Both are None if not configured.
-    Modal stores tokens in ~/.modal.toml after `modal setup`, but for
+    Modal stores tokens in ~/.modal.toml after `uv run modal setup`, but for
     web endpoint auth we read from .env.
     """
     from dotenv import load_dotenv

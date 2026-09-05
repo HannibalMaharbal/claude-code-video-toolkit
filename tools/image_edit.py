@@ -14,22 +14,22 @@ Capabilities:
 
 Examples:
   # Background replacement
-  python tools/image_edit.py --input photo.jpg --background "pyramids of Egypt"
+  uv run tools/image_edit.py --input photo.jpg --background "pyramids of Egypt"
 
   # Style transfer
-  python tools/image_edit.py --input photo.jpg --style "cyberpunk neon city"
+  uv run tools/image_edit.py --input photo.jpg --style "cyberpunk neon city"
 
   # Custom prompt (full control)
-  python tools/image_edit.py --input photo.jpg --prompt "Add warm sunset lighting"
+  uv run tools/image_edit.py --input photo.jpg --prompt "Add warm sunset lighting"
 
   # Using Modal instead of RunPod
-  python tools/image_edit.py --input photo.jpg --background "office" --cloud modal
+  uv run tools/image_edit.py --input photo.jpg --background "office" --cloud modal
 
   # Batch processing
-  python tools/image_edit.py --input-dir ./photos --background "studio backdrop" --output-dir ./edited
+  uv run tools/image_edit.py --input-dir ./photos --background "studio backdrop" --output-dir ./edited
 
   # With seed for reproducibility
-  python tools/image_edit.py --input photo.jpg --background "office" --seed 42
+  uv run tools/image_edit.py --input photo.jpg --background "office" --seed 42
 """
 
 import argparse
@@ -45,11 +45,11 @@ try:
     from PIL import Image
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Install with: pip install requests Pillow")
+    print("Install with: uv sync")
     sys.exit(1)
 
 sys.path.insert(0, str(Path(__file__).parent))
-from file_transfer import download_from_url, get_r2_payload_config
+from file_transfer import delete_from_r2, download_from_url, get_r2_payload_config
 
 # Background presets
 BACKGROUND_PRESETS = {
@@ -243,7 +243,11 @@ def edit_image(
     # Save result
     if "output_url" in result:
         log("Downloading from R2...", "dim")
-        download_from_url(result["output_url"], output_path, verbose=False)
+        if download_from_url(result["output_url"], output_path, verbose=False):
+            # The GPU side leaves the result object in R2. Drop it once the
+            # download succeeded, so the bucket does not grow without bound.
+            if result.get("r2_key"):
+                delete_from_r2(result["r2_key"])
     else:
         decode_and_save(result["edited_image_base64"], output_path)
 

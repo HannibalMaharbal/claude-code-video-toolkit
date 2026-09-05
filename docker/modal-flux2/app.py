@@ -35,7 +35,11 @@ image = (
     .pip_install(
         "torch==2.5.1",
         "torchvision==0.20.1",
-        "transformers>=4.45.0",
+        # Flux2KleinPipeline (diffusers git main) imports Qwen3ForCausalLM,
+        # which landed in transformers 4.51. The old >=4.45 floor let a
+        # cached pre-Qwen3 layer sit under a fresh diffusers, crash-looping
+        # the container at load_pipeline with ModuleNotFoundError.
+        "transformers>=4.51.0",
         "accelerate>=0.30.0",
         "sentencepiece",
         "protobuf",
@@ -45,8 +49,16 @@ image = (
         "fastapi[standard]",
         "huggingface_hub>=0.25.0",
     )
-    # Flux2KleinPipeline requires diffusers from git (not PyPI release)
-    .run_commands("pip install --no-cache-dir git+https://github.com/huggingface/diffusers")
+    # Flux2KleinPipeline is not in any tagged diffusers release yet, so this has
+    # to come from git. Pin the commit: an unpinned ref silently re-resolves on
+    # every rebuild, and when the new main needs a dependency the cached layer
+    # below it does not satisfy, the container dies in @modal.enter() -- which
+    # reads as a slow cold start rather than an error (#71, #74).
+    # Bump deliberately, and smoke-test the endpoint after.
+    .run_commands(
+        "pip install --no-cache-dir "
+        "git+https://github.com/huggingface/diffusers@119c339551f68ea523b9f204120b929e56342421"
+    )
     # Bake model weights into the image
     .run_commands(
         'python -c "'
