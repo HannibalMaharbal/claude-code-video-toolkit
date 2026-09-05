@@ -17,6 +17,7 @@
     "lint:python": "uv run ruff check tools/config.py tools/input_parser.py tools/scene_splitter.py tools/orchestrator.py tools/media_validation.py tests",
     "typecheck:python": "uv run mypy",
     "test:python": "uv run pytest",
+    "test:media-smoke": "node scripts/media-smoke.mjs",
     "verify": "npm run typecheck && npm run lint:python && npm run typecheck:python && npm run test:python && npm run build"
   },
   "devDependencies": {
