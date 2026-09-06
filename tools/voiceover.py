@@ -41,6 +41,8 @@ from config import (
     get_brand_dir,
     get_default_voice_provider,
     get_elevenlabs_api_key,
+    get_sixtydb_api_key,
+    get_sixtydb_voice_id,
     get_voice_id,
     load_brand_voice_config,
 )
@@ -117,9 +119,9 @@ Examples:
         "--provider",
         type=str,
         default=default_provider,
-        choices=["elevenlabs", "qwen3", "kokoro"],
+        choices=["elevenlabs", "qwen3", "kokoro", "60db"],
         help=f"TTS provider (default: {default_provider}, from toolkit registry). "
-        "kokoro=local/free, qwen3=Modal/free, elevenlabs=paid",
+        "kokoro=local/free, qwen3=Modal/free, elevenlabs=paid, 60db=paid (Hindi/Indian voices)",
     )
 
     # ElevenLabs-specific options
@@ -161,6 +163,22 @@ Examples:
         default=1.0,
         help="Speech speed multiplier (default: 1.0)",
     )
+
+    # 60db-specific options (stability/similarity/speed are shared, on the 0-1 scale)
+    parser.add_argument(
+        "--transport",
+        type=str,
+        default="synthesize",
+        choices=["synthesize", "stream", "websocket"],
+        help="60db API transport (default: synthesize)",
+    )
+    parser.add_argument(
+        "--no-enhance",
+        dest="enhance",
+        action="store_false",
+        help="Disable 60db audio enhancement (on by default)",
+    )
+    parser.set_defaults(enhance=True)
 
     # Qwen3-TTS-specific options
     parser.add_argument(
@@ -234,6 +252,14 @@ Examples:
 
     # Common options
     parser.add_argument(
+        "--max-wpm",
+        type=float,
+        default=None,
+        help="Pace clamp (any provider): takes exceeding this words-per-minute "
+             "are slowed with pitch-preserving atempo (floor 0.85x). Try 165. "
+             "Results always include wpm + a pacing label for QC.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output result as JSON (for machine parsing)",
@@ -293,6 +319,7 @@ def generate_single_audio(
     similarity: float,
     style: float,
     speed: float,
+    max_wpm: float | None = None,
 ) -> dict:
     """Generate a single audio file from script text using ElevenLabs. Returns result dict."""
     _, VoiceSettings, save = _get_elevenlabs_imports()
@@ -324,6 +351,83 @@ def generate_single_audio(
         result["duration_seconds"] = round(duration, 2)
         result["duration_frames_30fps"] = int(duration * 30)
 
+    _apply_pacing_qc(result, script, max_wpm)
+    return result
+
+
+def _apply_pacing_qc(result: dict, script: str, max_wpm: float | None) -> None:
+    """Add wpm/pacing fields to a result; clamp pace in place if max_wpm set.
+
+    Provider-agnostic. Qwen3-TTS applies its own pacing QC inside
+    qwen3_tts.generate_audio(), so callers pass max_wpm straight through
+    there instead of calling this.
+    """
+    from pacing import clamp_pace, pace_label
+
+    if not result.get("success") or not result.get("output"):
+        return
+    if max_wpm:
+        clamp = clamp_pace(result["output"], script, max_wpm, verbose=False)
+        if clamp.get("applied"):
+            new_dur = clamp["duration_seconds"]
+            result["duration_seconds"] = new_dur
+            result["duration_frames_30fps"] = int(new_dur * 30) if new_dur else None
+            result["pace_adjusted"] = {
+                "original_wpm": clamp["original_wpm"],
+                "atempo": clamp["atempo"],
+            }
+    wpm, label = pace_label(script, result.get("duration_seconds"))
+    result["wpm"] = wpm
+    result["pacing"] = label
+
+
+def _pace_note(result: dict) -> str:
+    """Human-mode pacing annotation for a per-scene / single-file result line."""
+    wpm = result.get("wpm")
+    if not wpm:
+        return ""
+    note = f", {wpm:.0f} wpm"
+    if result.get("pace_adjusted"):
+        note += f" [clamped from {result['pace_adjusted']['original_wpm']:.0f}]"
+    elif result.get("pacing") in ("fast", "slow"):
+        note += f" [{result['pacing'].upper()} — try --max-wpm 165]"
+    return note
+
+
+def generate_single_audio_60db(
+    script: str,
+    output_path: Path,
+    voice_id: str | None,
+    stability: float,
+    similarity: float,
+    speed: float,
+    enhance: bool,
+    transport: str,
+    api_key: str | None,
+    max_wpm: float | None = None,
+) -> dict:
+    """Generate a single audio file from script text using 60db. Returns result dict.
+
+    stability/similarity are passed on the unified 0-1 scale and converted to
+    60db's native 0-100 inside sixtydb_tts.generate_audio().
+    """
+    from sixtydb_tts import generate_audio
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    result = generate_audio(
+        text=script,
+        output_path=str(output_path),
+        voice_id=voice_id,
+        stability=stability,
+        similarity=similarity,
+        speed=speed,
+        enhance=enhance,
+        transport=transport,
+        api_key=api_key,
+        verbose=False,
+    )
+    _apply_pacing_qc(result, script, max_wpm)
     return result
 
 
@@ -338,8 +442,13 @@ def generate_single_audio_qwen3(
     temperature: float | None = None,
     top_p: float | None = None,
     cloud: str = "runpod",
+    max_wpm: float | None = None,
 ) -> dict:
-    """Generate a single audio file from script text using Qwen3-TTS. Returns result dict."""
+    """Generate a single audio file from script text using Qwen3-TTS. Returns result dict.
+
+    Qwen3-TTS runs its own pacing QC inside qwen3_tts.generate_audio(), so
+    max_wpm is passed straight through rather than via _apply_pacing_qc().
+    """
     from qwen3_tts import generate_audio
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -356,6 +465,7 @@ def generate_single_audio_qwen3(
         temperature=temperature,
         top_p=top_p,
         cloud=cloud,
+        max_wpm=max_wpm,
     )
 
 
@@ -364,19 +474,22 @@ def generate_single_audio_kokoro(
     output_path: Path,
     voice: str = "am_michael",
     speed: float = 1.0,
+    max_wpm: float | None = None,
 ) -> dict:
     """Generate a single audio file from script text using Kokoro TTS. Returns result dict."""
     from kokoro_tts import generate_audio
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    return generate_audio(
+    result = generate_audio(
         text=script,
         output_path=str(output_path),
         voice=voice,
         speed=speed,
         verbose=False,
     )
+    _apply_pacing_qc(result, script, max_wpm)
+    return result
 
 
 def process_scene_directory(
@@ -393,6 +506,10 @@ def process_scene_directory(
     similarity: float = 0.95,
     style: float = 0.0,
     speed: float = 1.0,
+    # 60db params
+    enhance: bool = True,
+    transport: str = "synthesize",
+    sixtydb_api_key: str | None = None,
     # Qwen3 params
     speaker: str = "Ryan",
     language: str = "Auto",
@@ -405,6 +522,8 @@ def process_scene_directory(
     # Kokoro params
     voice: str = "am_michael",
     kokoro_speed: float = 1.0,
+    # Common
+    max_wpm: float | None = None,
 ) -> list[dict]:
     """Process all .txt files in directory, generate .mp3 for each."""
     txt_files = sorted(scene_dir.glob("*.txt"))
@@ -466,6 +585,7 @@ def process_scene_directory(
                     output_path=mp3_file,
                     voice=voice,
                     speed=kokoro_speed,
+                    max_wpm=max_wpm,
                 )
             elif provider == "qwen3":
                 result = generate_single_audio_qwen3(
@@ -479,6 +599,20 @@ def process_scene_directory(
                     temperature=temperature,
                     top_p=top_p,
                     cloud=cloud,
+                    max_wpm=max_wpm,
+                )
+            elif provider == "60db":
+                result = generate_single_audio_60db(
+                    script=script,
+                    output_path=mp3_file,
+                    voice_id=voice_id or None,
+                    stability=stability,
+                    similarity=similarity,
+                    speed=speed,
+                    enhance=enhance,
+                    transport=transport,
+                    api_key=sixtydb_api_key,
+                    max_wpm=max_wpm,
                 )
             else:
                 result = generate_single_audio(
@@ -491,6 +625,7 @@ def process_scene_directory(
                     similarity=similarity,
                     style=style,
                     speed=speed,
+                    max_wpm=max_wpm,
                 )
             result["script"] = str(txt_file)
             results.append(result)
@@ -499,7 +634,7 @@ def process_scene_directory(
                 total_duration += result["duration_seconds"]
 
             if not json_output:
-                duration_str = f" ({result.get('duration_seconds', '?')}s)"
+                duration_str = f" ({result.get('duration_seconds', '?')}s{_pace_note(result)})"
                 print(f"  {mp3_file.name}{duration_str}", file=sys.stderr)
 
     return results, total_duration, total_chars
@@ -586,12 +721,61 @@ def main():
             clone_cfg = qwen3_cfg.get("clone", {})
             if clone_cfg and not args.ref_audio:
                 brand_dir = get_brand_dir(args.brand)
-                ref_audio_path = brand_dir / clone_cfg["refAudio"]
-                if ref_audio_path.exists():
-                    args.ref_audio = str(ref_audio_path)
-                    args.ref_text = clone_cfg.get("refText", "")
-                else:
-                    print(f"Warning: Clone ref audio not found: {ref_audio_path}", file=sys.stderr)
+
+                if "design" in clone_cfg:
+                    # VoiceDesign mode — design a character voice from a brief,
+                    # cache it, and use that cached wav as the clone reference.
+                    design = clone_cfg["design"]
+                    if "seedText" not in design or "instruct" not in design:
+                        print(
+                            "Error: clone.design requires both 'seedText' and 'instruct'",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
+
+                    cached_rel = design.get("cachedRef", "assets/voice-design-ref.wav")
+                    cached_path = brand_dir / cached_rel
+
+                    if not cached_path.exists():
+                        print(
+                            f"Designing brand voice for '{args.brand}' (first use)...\n"
+                            f"  Instruct: {design['instruct'][:80]}...",
+                            file=sys.stderr,
+                        )
+                        cached_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        from qwen3_tts import generate_audio as _qwen3_generate
+                        design_result = _qwen3_generate(
+                            text=design["seedText"],
+                            output_path=str(cached_path),
+                            design_instruct=design["instruct"],
+                            language=(design.get("language") or "English"),
+                            output_format="wav",
+                            verbose=True,
+                            cloud=args.cloud,
+                        )
+                        if not design_result.get("success"):
+                            print(
+                                f"Error: voice design failed: {design_result.get('error')}",
+                                file=sys.stderr,
+                            )
+                            sys.exit(1)
+                        print(f"  Cached designed voice at {cached_path}", file=sys.stderr)
+
+                    args.ref_audio = str(cached_path)
+                    args.ref_text = design["seedText"]
+
+                elif "refAudio" in clone_cfg:
+                    # Legacy: user-recorded reference audio
+                    ref_audio_path = brand_dir / clone_cfg["refAudio"]
+                    if ref_audio_path.exists():
+                        args.ref_audio = str(ref_audio_path)
+                        args.ref_text = clone_cfg.get("refText", "")
+                    else:
+                        print(
+                            f"Warning: Clone ref audio not found: {ref_audio_path}",
+                            file=sys.stderr,
+                        )
             # Apply speaker/language/instruct defaults from brand
             if qwen3_cfg.get("speaker") and args.speaker == "Ryan":
                 args.speaker = qwen3_cfg["speaker"]
@@ -611,6 +795,22 @@ def main():
             # Apply voice ID from brand if not explicitly provided
             if not args.voice_id and voice_config.get("voiceId") and voice_config["voiceId"] != "YOUR_VOICE_ID_HERE":
                 args.voice_id = voice_config["voiceId"]
+        elif provider == "60db":
+            # Apply 60db voice ID + settings from the brand's `sixtydb` block
+            sixtydb_cfg = voice_config.get("sixtydb", {})
+            _sixtydb_vid = sixtydb_cfg.get("voiceId")
+            if not args.voice_id and _sixtydb_vid and _sixtydb_vid != "YOUR_VOICE_ID_HERE":
+                args.voice_id = _sixtydb_vid
+            sixtydb_settings = sixtydb_cfg.get("settings", {})
+            # Brand settings fill in only when the CLI left a default in place.
+            if "stability" in sixtydb_settings and args.stability == 0.85:
+                args.stability = sixtydb_settings["stability"]
+            if "similarity" in sixtydb_settings and args.similarity == 0.95:
+                args.similarity = sixtydb_settings["similarity"]
+            if "speed" in sixtydb_settings and args.speed == 1.0:
+                args.speed = sixtydb_settings["speed"]
+            if "enhance" in sixtydb_settings and args.enhance is True:
+                args.enhance = sixtydb_settings["enhance"]
 
     # Resolve tone preset → instruct text for Qwen3
     if provider == "qwen3" and (args.tone or args.instruct):
@@ -630,6 +830,31 @@ def main():
     # Provider-specific setup
     client = None
     voice_id = None
+    sixtydb_api_key = None
+
+    if provider == "60db":
+        sixtydb_api_key = get_sixtydb_api_key()
+        if not sixtydb_api_key:
+            print(
+                "Error: No 60db API key found.\n"
+                "\n"
+                "You have 3 options:\n"
+                "\n"
+                "  1. Add a 60db key:\n"
+                "     echo \"SIXTYDB_API_KEY=sk_live_your_key\" >> .env\n"
+                "\n"
+                "  2. Use kokoro (free/local), qwen3 (free/Modal), or elevenlabs instead:\n"
+                "     python3 tools/voiceover.py --provider kokoro --scene-dir SCENES --json\n"
+                "     python3 tools/voiceover.py --provider qwen3 --scene-dir SCENES --json\n"
+                "\n"
+                "  3. Skip voiceover entirely:\n"
+                "     Videos render fine without audio. Add voiceover later when ready.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        from sixtydb_tts import DEFAULT_VOICE_ID as _SIXTYDB_DEFAULT_VOICE
+        voice_id = args.voice_id or get_sixtydb_voice_id() or _SIXTYDB_DEFAULT_VOICE
 
     if provider == "elevenlabs":
         api_key = get_elevenlabs_api_key()
@@ -672,7 +897,9 @@ def main():
 
         if not args.json:
             txt_count = len(list(scene_dir.glob("*.txt")))
-            provider_label = "Qwen3-TTS" if provider == "qwen3" else "ElevenLabs"
+            provider_label = {"qwen3": "Qwen3-TTS", "kokoro": "Kokoro TTS", "60db": "60db"}.get(
+                provider, "ElevenLabs"
+            )
             print(f"Processing {txt_count} scene scripts in {scene_dir} ({provider_label})...", file=sys.stderr)
 
         if args.dry_run:
@@ -700,6 +927,10 @@ def main():
                 cloud=args.cloud,
                 voice=args.voice,
                 kokoro_speed=args.speed,
+                enhance=args.enhance,
+                transport=args.transport,
+                sixtydb_api_key=sixtydb_api_key,
+                max_wpm=args.max_wpm,
             )
             result = {
                 "dry_run": True,
@@ -717,6 +948,15 @@ def main():
                     "similarity": args.similarity,
                     "style": args.style,
                     "speed": args.speed,
+                }
+            elif provider == "60db":
+                result["voice_id"] = voice_id
+                result["transport"] = args.transport
+                result["settings"] = {
+                    "stability": args.stability,
+                    "similarity": args.similarity,
+                    "speed": args.speed,
+                    "enhance": args.enhance,
                 }
             else:
                 result["speaker"] = args.speaker
@@ -756,6 +996,10 @@ def main():
             cloud=args.cloud,
             voice=args.voice,
             kokoro_speed=args.speed,
+            enhance=args.enhance,
+            transport=args.transport,
+            sixtydb_api_key=sixtydb_api_key,
+            max_wpm=args.max_wpm,
         )
 
         # Build final result
@@ -772,6 +1016,9 @@ def main():
         if provider == "elevenlabs":
             result["voice_id"] = voice_id
             result["model"] = args.model
+        elif provider == "60db":
+            result["voice_id"] = voice_id
+            result["transport"] = args.transport
 
         # Concat if requested
         if args.concat:
@@ -818,6 +1065,15 @@ def main():
                 "style": args.style,
                 "speed": args.speed,
             }
+        elif provider == "60db":
+            result["voice_id"] = voice_id
+            result["transport"] = args.transport
+            result["settings"] = {
+                "stability": args.stability,
+                "similarity": args.similarity,
+                "speed": args.speed,
+                "enhance": args.enhance,
+            }
         else:
             result["speaker"] = args.speaker
             result["language"] = args.language
@@ -834,6 +1090,9 @@ def main():
             if provider == "elevenlabs":
                 print(f"  Voice ID: {voice_id}")
                 print(f"  Model: {args.model}")
+            elif provider == "60db":
+                print(f"  Voice ID: {voice_id}")
+                print(f"  Transport: {args.transport}")
             else:
                 print(f"  Speaker: {args.speaker}")
                 print(f"  Language: {args.language}")
@@ -843,12 +1102,9 @@ def main():
 
     # Generate voiceover
     if not args.json:
-        if provider == "kokoro":
-            provider_label = "Kokoro TTS"
-        elif provider == "qwen3":
-            provider_label = "Qwen3-TTS"
-        else:
-            provider_label = "ElevenLabs"
+        provider_label = {"kokoro": "Kokoro TTS", "qwen3": "Qwen3-TTS", "60db": "60db"}.get(
+            provider, "ElevenLabs"
+        )
         print(f"Generating voiceover ({len(script)} chars, {provider_label})...", file=sys.stderr)
 
     if provider == "kokoro":
@@ -857,6 +1113,7 @@ def main():
             output_path=output_path,
             voice=args.voice,
             speed=args.speed,
+            max_wpm=args.max_wpm,
         )
     elif provider == "qwen3":
         result = generate_single_audio_qwen3(
@@ -870,6 +1127,20 @@ def main():
             temperature=args.temperature,
             top_p=args.top_p,
             cloud=args.cloud,
+            max_wpm=args.max_wpm,
+        )
+    elif provider == "60db":
+        result = generate_single_audio_60db(
+            script=script,
+            output_path=output_path,
+            voice_id=voice_id,
+            stability=args.stability,
+            similarity=args.similarity,
+            speed=args.speed,
+            enhance=args.enhance,
+            transport=args.transport,
+            api_key=sixtydb_api_key,
+            max_wpm=args.max_wpm,
         )
     else:
         result = generate_single_audio(
@@ -882,6 +1153,7 @@ def main():
             similarity=args.similarity,
             style=args.style,
             speed=args.speed,
+            max_wpm=args.max_wpm,
         )
 
     result["mode"] = "single"
@@ -891,6 +1163,9 @@ def main():
     elif provider == "elevenlabs":
         result["voice_id"] = voice_id
         result["model"] = args.model
+    elif provider == "60db":
+        result["voice_id"] = voice_id
+        result["transport"] = args.transport
 
     if args.json:
         print(json.dumps(result, indent=2))
@@ -899,8 +1174,9 @@ def main():
             print(f"Voiceover saved to: {output_path}", file=sys.stderr)
             duration = result.get("duration_seconds")
             if duration:
+                frames = int(duration * 30)
                 print(
-                    f"Duration: {duration:.2f}s ({int(duration * 30)} frames @ 30fps)",
+                    f"Duration: {duration:.2f}s ({frames} frames @ 30fps{_pace_note(result)})",
                     file=sys.stderr,
                 )
         else:
