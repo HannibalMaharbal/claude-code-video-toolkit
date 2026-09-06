@@ -5,6 +5,7 @@ description = "Local and cloud-assisted video production toolkit"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "boto3>=1.28.0",
+  "elevenlabs>=1.0.0",
   "kokoro-onnx>=0.4.0",
   "matplotlib>=3.7",
   "mlx-whisper>=0.4.0",
@@ -14,6 +15,25 @@ dependencies = [
   "python-dotenv>=1.0.0",
   "requests>=2.28.0",
   "soundfile>=0.12.0",
+  "websocket-client>=1.6.0",
+]
+
+[project.optional-dependencies]
+# Burned karaoke captions in templates/concept-explainer-short (word-level
+# forced alignment). Reuses the torch already pulled by mlx-whisper (core).
+# tools/transcribe.py does NOT need this — it uses mlx-whisper (Apple
+# Silicon) from the core deps above.
+#   uv sync --extra whisper
+whisper = [
+  "openai-whisper>=20231117",
+]
+# YouTube upload — tools/youtube_upload.py + the /publish command. OAuth 2.0 +
+# Data API v3. Only needed to publish to YouTube. See docs/youtube-upload.md.
+#   uv sync --extra youtube
+youtube = [
+  "google-api-python-client>=2.100.0",
+  "google-auth-oauthlib>=1.2.0",
+  "google-auth-httplib2>=0.2.0",
 ]
 
 [dependency-groups]
