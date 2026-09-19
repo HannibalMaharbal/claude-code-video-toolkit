@@ -224,7 +224,6 @@ def check_runpod_env_vars() -> list[dict]:
 def check_voice() -> dict:
     """Check voice/TTS configuration."""
     elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
-    elevenlabs_voice = os.getenv("ELEVENLABS_VOICE_ID")
 
     # Qwen3-TTS is "configured" if its endpoint exists (either Modal or RunPod)
     qwen3_modal = os.getenv("MODAL_QWEN3_TTS_ENDPOINT_URL")
@@ -298,7 +297,6 @@ def main():
     if verbose:
         print("Prerequisites:")
         for p in prereqs:
-            status = "OK" if p["ok"] else ("MISSING" if p["required"] else "not found")
             req = " (required)" if p["required"] else ""
             print(f"  {'[x]' if p['ok'] else '[ ]'} {p['name']}{req}: {p['detail']}")
         print()

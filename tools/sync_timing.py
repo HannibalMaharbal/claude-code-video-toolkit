@@ -565,11 +565,8 @@ def format_comparison_table(
     template_type: str,
 ) -> str:
     """Format human-readable comparison table."""
-    desc = TEMPLATE_TYPES.get(template_type, {}).get("description", template_type)
     lines = []
 
-    # Count audio files
-    audio_count = sum(1 for m in matches if m["audio"])
     lines.append("")
 
     # Header
@@ -782,7 +779,6 @@ def build_json_output(
 
         if audio and audio["duration_seconds"]:
             audio_dur = audio["duration_seconds"]
-            proposed = round(audio_dur + padding, 2)
             proposed_ceil = math.ceil(audio_dur + padding)
             entry["audio_seconds"] = audio_dur
             entry["audio_file"] = audio["filename"]

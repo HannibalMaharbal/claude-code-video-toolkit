@@ -12,7 +12,8 @@ Usage:
     uv run tools/upscale.py --input image.jpg --output upscaled.png --cloud modal
 
     # Specify model and scale
-    uv run tools/upscale.py --input image.jpg --output upscaled.png --model anime --scale 4 --cloud runpod
+    uv run tools/upscale.py --input image.jpg --output upscaled.png \
+        --model anime --scale 4 --cloud runpod
 
     # With face enhancement
     uv run tools/upscale.py --input image.jpg --output upscaled.png --face-enhance --cloud runpod
@@ -30,23 +31,37 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
-import time
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 import requests
 
+if TYPE_CHECKING:
+    from cloud_gpu import ProgressReporter
+
 sys.path.insert(0, str(Path(__file__).parent))
 from file_transfer import (
-    upload_to_storage, download_from_r2, r2_cleanup,
-    download_from_url, get_r2_payload_config,
+    download_from_r2,
+    download_from_url,
+    get_r2_payload_config,
+    r2_cleanup,
+    upload_to_storage,
 )
 
 # Docker image for RunPod endpoint
 REALESRGAN_DOCKER_IMAGE = "ghcr.io/conalmullan/video-toolkit-realesrgan:v2"
 REALESRGAN_TEMPLATE_NAME = "video-toolkit-realesrgan-v2"
 REALESRGAN_ENDPOINT_NAME = "video-toolkit-upscale"
+
+
+class RunpodSetupResult(TypedDict, total=False):
+    success: bool
+    template_id: str
+    endpoint_id: str
+    created_template: bool
+    created_endpoint: bool
+    error: str
 
 
 def process_with_cloud(
@@ -59,7 +74,7 @@ def process_with_cloud(
     timeout: int = 300,
     verbose: bool = True,
     cloud: str = "runpod",
-    progress=None,
+    progress: ProgressReporter | None = None,
 ) -> dict:
     """Process image using cloud GPU endpoint."""
     with r2_cleanup() as r2_keys_to_cleanup:
@@ -117,7 +132,7 @@ def process_with_cloud(
 
         if output_r2_key:
             if verbose:
-                print(f"Downloading result from R2...", file=sys.stderr)
+                print("Downloading result from R2...", file=sys.stderr)
             downloaded = download_from_r2(output_r2_key, output_path)
             if downloaded:
                 r2_keys_to_cleanup.append(output_r2_key)
@@ -156,7 +171,7 @@ def runpod_graphql_query(api_key: str, query: str, variables: dict | None = None
         "Authorization": f"Bearer {api_key}",
     }
 
-    payload = {"query": query}
+    payload: dict[str, object] = {"query": query}
     if variables:
         payload["variables"] = variables
 
@@ -368,14 +383,10 @@ def save_endpoint_to_env(endpoint_id: str, verbose: bool = True) -> bool:
     return True
 
 
-def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> dict:
+def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> RunpodSetupResult:
     """Set up RunPod endpoint for upscale tool."""
-    result = {
+    result: RunpodSetupResult = {
         "success": False,
-        "template_id": None,
-        "endpoint_id": None,
-        "created_template": False,
-        "created_endpoint": False,
     }
 
     from dotenv import load_dotenv
@@ -466,7 +477,8 @@ Examples:
   uv run tools/upscale.py --input art.png --output art_4x.png --model anime --cloud runpod
 
   # With face enhancement
-  uv run tools/upscale.py --input portrait.jpg --output portrait_4x.png --face-enhance --cloud runpod
+  uv run tools/upscale.py --input portrait.jpg --output portrait_4x.png \
+      --face-enhance --cloud runpod
 
   # Setup RunPod endpoint (first-time)
   uv run tools/upscale.py --setup
@@ -579,10 +591,10 @@ def main():
 
     # Handle --setup
     if args.setup:
-        result = setup_runpod(gpu_id=args.setup_gpu, verbose=verbose)
+        setup_result = setup_runpod(gpu_id=args.setup_gpu, verbose=verbose)
         if args.json:
-            print(json.dumps(result, indent=2))
-        if result.get("error"):
+            print(json.dumps(setup_result, indent=2))
+        if setup_result.get("error"):
             sys.exit(1)
         sys.exit(0)
 

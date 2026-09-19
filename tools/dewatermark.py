@@ -50,8 +50,12 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 import requests
+
+if TYPE_CHECKING:
+    from cloud_gpu import ProgressReporter
 
 sys.path.insert(0, str(Path(__file__).parent))
 from file_transfer import (
@@ -161,9 +165,15 @@ def get_nvidia_vram_gb() -> int | None:
     return None
 
 
-def detect_compute_device() -> dict:
+class DetectedDevice(TypedDict):
+    device: str
+    memory_gb: int | None
+    description: str
+
+
+def detect_compute_device() -> DetectedDevice:
     """Detect available compute device and memory."""
-    result = {
+    result: DetectedDevice = {
         "device": "cpu",
         "memory_gb": None,
         "description": "CPU (no GPU detected)",
@@ -1139,7 +1149,7 @@ def process_with_cloud(
     original_width: int | None = None,
     original_height: int | None = None,
     cloud: str = "runpod",
-    progress=None,
+    progress: ProgressReporter | None = None,
 ) -> dict:
     """Process video using cloud GPU endpoint (RunPod or Modal)."""
     with r2_cleanup() as r2_keys_to_cleanup:
@@ -1292,7 +1302,7 @@ def runpod_graphql_query(api_key: str, query: str, variables: dict | None = None
         "Authorization": f"Bearer {api_key}",
     }
 
-    payload = {"query": query}
+    payload: dict[str, object] = {"query": query}
     if variables:
         payload["variables"] = variables
 
@@ -1509,7 +1519,16 @@ def save_endpoint_to_env(endpoint_id: str, verbose: bool = True) -> bool:
     return True
 
 
-def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> dict:
+class RunpodSetupResult(TypedDict, total=False):
+    success: bool
+    template_id: str
+    endpoint_id: str
+    created_template: bool
+    created_endpoint: bool
+    error: str
+
+
+def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> RunpodSetupResult:
     """
     Set up RunPod endpoint for dewatermark tool.
 
@@ -1520,17 +1539,14 @@ def setup_runpod(gpu_id: str = "AMPERE_24", verbose: bool = True) -> dict:
 
     Returns dict with setup result.
     """
-    result = {
+    result: RunpodSetupResult = {
         "success": False,
-        "template_id": None,
-        "endpoint_id": None,
-        "created_template": False,
-        "created_endpoint": False,
     }
 
     # Get API key
-    config = get_runpod_config()
-    api_key = config.get("api_key")
+    from dotenv import load_dotenv
+    load_dotenv()
+    api_key = os.getenv("RUNPOD_API_KEY")
 
     if not api_key:
         result["error"] = "RUNPOD_API_KEY not set. Add to .env file first."
@@ -1649,10 +1665,10 @@ def main():
 
     # Handle --setup (RunPod endpoint setup)
     if args.setup:
-        result = setup_runpod(gpu_id=args.setup_gpu, verbose=verbose)
+        setup_result = setup_runpod(gpu_id=args.setup_gpu, verbose=verbose)
         if args.json:
-            print(json.dumps(result, indent=2))
-        if result.get("error"):
+            print(json.dumps(setup_result, indent=2))
+        if setup_result.get("error"):
             sys.exit(1)
         sys.exit(0)
 
@@ -1682,7 +1698,7 @@ def main():
     # Cloud GPU processing
     if args.cloud:
         # Get video info for smart resize ratio suggestion
-        video_info = get_video_info(args.input)
+        video_info = get_video_info(args.input) or {}
         video_width = video_info.get("width", 1280)
         video_height = video_info.get("height", 720)
         video_duration = video_info.get("duration", 0)
@@ -1712,7 +1728,7 @@ def main():
 
         if args.dry_run:
             from cloud_gpu import get_provider_config
-            config = get_provider_config(args.cloud, "dewatermark")
+            get_provider_config(args.cloud, "dewatermark")
             result = {
                 "dry_run": True,
                 "mode": args.cloud,
@@ -1863,7 +1879,7 @@ def main():
             }
 
         # Get video info for dry-run display
-        video_info = get_video_info(args.input)
+        video_info = get_video_info(args.input) or {}
 
         # Dry run
         if args.dry_run:
@@ -1923,7 +1939,7 @@ def main():
             neighbor_length = profile["neighbor_length"]
             ref_stride = profile["ref_stride"]
             subvideo_length = profile["subvideo_length"]
-            available_memory = compute["memory_gb"]
+            available_memory = compute["memory_gb"] or 16
             if verbose:
                 print(f"Detected: {compute['description']}")
                 print(f"Using {profile['description']} profile: subvideo={subvideo_length}, neighbor={neighbor_length}, ref_stride={ref_stride}")
@@ -1936,7 +1952,7 @@ def main():
             available_memory = compute["memory_gb"] or 16
 
         # Get video info and check if splitting is needed
-        video_info = get_video_info(args.input)
+        video_info = get_video_info(args.input) or {}
         if not video_info:
             print("Error: Could not read video info", file=sys.stderr)
             sys.exit(1)

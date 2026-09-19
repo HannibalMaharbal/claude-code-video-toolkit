@@ -72,7 +72,10 @@ def extract_last_frame(video_path, output_path):
     ]
     result = subprocess.run(cmd, capture_output=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed extracting frame from {video_path}: {result.stderr.decode()[-200:]}")
+        stderr_tail = result.stderr.decode()[-200:]
+        raise RuntimeError(
+            f"ffmpeg failed extracting frame from {video_path}: {stderr_tail}"
+        )
     if not os.path.exists(output_path):
         raise RuntimeError(f"Frame extraction produced no output: {output_path}")
     return output_path
@@ -131,13 +134,25 @@ def main():
     parser.add_argument("--scenes-dir", help="Directory of numbered scene images")
     parser.add_argument("--first-clip", help="Start chaining from this existing video clip")
     parser.add_argument("--output-dir", required=True, help="Output directory for chained clips")
-    parser.add_argument("--prompt", default="Cinematic continuation, flowing transition", help="Default prompt for all scenes")
-    parser.add_argument("--prompts-file", help="JSON file with per-scene prompts: {\"1\": \"prompt\", ...}")
+    parser.add_argument(
+        "--prompt",
+        default="Cinematic continuation, flowing transition",
+        help="Default prompt for all scenes",
+    )
+    parser.add_argument(
+        "--prompts-file",
+        help='JSON file with per-scene prompts: {"1": "prompt", ...}',
+    )
     parser.add_argument("--start", type=int, default=1, help="First scene number (default: 1)")
     parser.add_argument("--end", type=int, default=30, help="Last scene number (default: 30)")
     parser.add_argument("--cloud", default="modal", help="Cloud provider (default: modal)")
     parser.add_argument("--prefix", default="chain", help="Output filename prefix (default: chain)")
-    parser.add_argument("--progress", choices=["json", "human"], default="human", help="Progress output format")
+    parser.add_argument(
+        "--progress",
+        choices=["json", "human"],
+        default="human",
+        help="Progress output format",
+    )
 
     args, extra = parser.parse_known_args()
     use_progress = args.progress == "json"
@@ -171,15 +186,22 @@ def main():
         prompt = scene_prompts.get(i, args.prompt)
         elapsed = time.time() - t0
 
-        # Skip if already exists — prefer exact name, else glob for suffix variants (chain-05-brigid.mp4)
+        # Skip if already exists — prefer exact name, else glob for suffix
+        # variants (chain-05-brigid.mp4)
         if os.path.exists(output_path):
             existing = [output_path]
         else:
             existing = glob.glob(os.path.join(args.output_dir, f"{args.prefix}-{curr}-*.mp4"))
         if existing:
             found = existing[0]
+            pct = round(completed / total * 100)
             if use_progress:
-                progress("item", f"Scene {curr} already exists ({os.path.basename(found)}), skipping", pct=round(completed / total * 100), elapsed=elapsed)
+                progress(
+                    "item",
+                    f"Scene {curr} already exists ({os.path.basename(found)}), skipping",
+                    pct=pct,
+                    elapsed=elapsed,
+                )
             else:
                 print(f"Scene {curr} already exists ({os.path.basename(found)}), skipping")
             completed += 1
@@ -187,7 +209,12 @@ def main():
             continue
 
         if use_progress:
-            progress("item", f"Starting scene {curr}/{args.end} ({completed}/{total} done)", pct=round(completed / total * 100), elapsed=elapsed)
+            progress(
+                "item",
+                f"Starting scene {curr}/{args.end} ({completed}/{total} done)",
+                pct=round(completed / total * 100),
+                elapsed=elapsed,
+            )
         else:
             print(f"\n--- Scene {curr}/{args.end} ---")
 
@@ -224,7 +251,12 @@ def main():
             completed += 1
             elapsed = time.time() - t0
             if use_progress:
-                progress("item", f"Scene {curr} complete ({completed}/{total})", pct=round(completed / total * 100), elapsed=elapsed)
+                progress(
+                    "item",
+                    f"Scene {curr} complete ({completed}/{total})",
+                    pct=round(completed / total * 100),
+                    elapsed=elapsed,
+                )
             else:
                 print(f"DING: Scene {curr} done ({completed}/{total})")
         except RuntimeError as e:
@@ -245,7 +277,12 @@ def main():
 
     elapsed = time.time() - t0
     if use_progress:
-        progress("complete", f"All done: {completed}/{total} scenes in {elapsed:.0f}s", pct=100, elapsed=elapsed)
+        progress(
+            "complete",
+            f"All done: {completed}/{total} scenes in {elapsed:.0f}s",
+            pct=100,
+            elapsed=elapsed,
+        )
     else:
         print(f"\nALL DONE: {completed}/{total} scenes in {elapsed:.0f}s")
 

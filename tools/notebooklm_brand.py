@@ -539,7 +539,6 @@ def main():
             sys.exit(1)
 
         # Step 6: Prepare audio (full audio + silence for outro)
-        audio_source = args.audio_file or args.input
         combined_audio_path = os.path.join(temp_dir, "combined_audio.m4a")
         if verbose:
             print("Preparing audio track...", file=sys.stderr)

@@ -95,6 +95,9 @@ projects/
 # one-off scripts). Tools that write to the repo root should target scratch/.
 scratch/
 
+# Graphify skill output (generated knowledge graph artifacts)
+graphify-out/
+
 # Keep directory structure
 !projects/.gitkeep
 

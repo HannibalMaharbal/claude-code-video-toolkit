@@ -51,7 +51,6 @@ import base64
 import json
 import os
 import sys
-import time
 from pathlib import Path
 
 import requests
@@ -176,7 +175,6 @@ def generate_audio(
       single call: {success, output, duration_seconds, duration_frames_30fps, wpm, pacing}
       batch call:  {success, outputs: [{output, duration_seconds, ...}, ...]}
     """
-    start_time = time.time()
     with r2_cleanup() as r2_keys_to_cleanup:
         # Normalize inputs
         is_batch = isinstance(text, list)
