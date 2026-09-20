@@ -1,0 +1,101 @@
+{
+  "version": "1.0",
+  "routes": {
+    "image_edit": {
+      "primary": "Pillow",
+      "secondary": "layout_render",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "image_generate": {
+      "primary": "none",
+      "secondary": "none",
+      "fallback": "manual",
+      "locality": "cloud",
+      "cost_class": "PAID",
+      "requires_approval": true
+    },
+    "layout": {
+      "primary": "layout_render",
+      "secondary": "Pillow",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "video_cut": {
+      "primary": "ffmpeg",
+      "secondary": "silence_cutter",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "audio_process": {
+      "primary": "ffmpeg",
+      "secondary": "media_validation",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "tts": {
+      "primary": "kokoro",
+      "secondary": "none",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "stt": {
+      "primary": "mlx-whisper",
+      "secondary": "none",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "subtitle": {
+      "primary": "transcribe",
+      "secondary": "subtitle_burn",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "translate": {
+      "primary": "ollama",
+      "secondary": "manual",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "qc_visual": {
+      "primary": "media_validation",
+      "secondary": "manual",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "FREE",
+      "requires_approval": false
+    },
+    "semantic_analysis": {
+      "primary": "manual",
+      "secondary": "none",
+      "fallback": "manual",
+      "locality": "cloud",
+      "cost_class": "PAID",
+      "requires_approval": true
+    },
+    "code": {
+      "primary": "Claude Code",
+      "secondary": "Codex",
+      "fallback": "Ollama",
+      "locality": "mixed",
+      "cost_class": "LIMITED",
+      "requires_approval": true
+    }
+  }
+}
