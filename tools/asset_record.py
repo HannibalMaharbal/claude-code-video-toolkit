@@ -79,6 +79,37 @@ def _media_type(metadata: dict[str, object]) -> str:
     return "other"
 
 
+def _text_asset_type(path: Path) -> str | None:
+    if path.suffix.lower() in {".srt", ".vtt"}:
+        return "subtitle"
+    if path.suffix.lower() in {".json", ".txt"}:
+        return "document"
+    return None
+
+
+def _metadata_for_asset(path: Path) -> tuple[str, dict[str, object], dict[str, object]]:
+    text_type = _text_asset_type(path)
+    if text_type == "subtitle":
+        from tools.transcribe import validate_subtitle_file
+
+        errors = validate_subtitle_file(path)
+        if errors:
+            raise AssetRecordError("Subtitle-QC fehlgeschlagen: " + "; ".join(errors))
+        return text_type, {}, {"bytes": path.stat().st_size}
+    if text_type == "document":
+        return text_type, {}, {"bytes": path.stat().st_size}
+    metadata = probe_media(path)
+    technical: dict[str, object] = {
+        "duration_s": metadata["duration"],
+        "codec": metadata.get("video_codec") or metadata.get("audio_codec"),
+        "container": metadata["container"],
+    }
+    for key in ("width", "height", "fps"):
+        if metadata.get(key) is not None:
+            technical[key] = metadata[key]
+    return _media_type(metadata), metadata, technical
+
+
 def _existing_record(asset_id: str, digest: str) -> dict[str, object] | None:
     if not ASSET_ROOT.is_dir():
         return None
@@ -201,7 +232,7 @@ def build_asset_record(
     license_ref: str | None = None,
 ) -> dict[str, object]:
     """Build, but do not persist, one SOURCE record for a validated media file."""
-    metadata = probe_media(source)
+    media_type, metadata, technical = _metadata_for_asset(source)
     asset_id = asset_id_for_sha256(digest)
     relative_path = destination.resolve().relative_to(ASSET_ROOT.resolve()).as_posix()
     rights: dict[str, object] = {
@@ -212,19 +243,11 @@ def build_asset_record(
     }
     if license_ref:
         rights["license_ref"] = license_ref
-    technical: dict[str, object] = {
-        "duration_s": metadata["duration"],
-        "codec": metadata.get("video_codec") or metadata.get("audio_codec"),
-        "container": metadata["container"],
-    }
-    for key in ("width", "height", "fps"):
-        if metadata.get(key) is not None:
-            technical[key] = metadata[key]
     return {
         "schema_version": "1.0.0",
         "asset_id": asset_id,
         "role": "SOURCE",
-        "media_type": _media_type(metadata),
+        "media_type": media_type,
         "path": relative_path,
         "sha256": digest,
         "bytes": source.stat().st_size,
@@ -482,15 +505,7 @@ def register_derived(
         raise AssetRecordError(
             f"Abweichendes Asset mit gleichem Namen existiert bereits: {target.name}"
         )
-    metadata = probe_media(output)
-    technical: dict[str, object] = {
-        "duration_s": metadata["duration"],
-        "codec": metadata.get("video_codec") or metadata.get("audio_codec"),
-        "container": metadata["container"],
-    }
-    for key in ("width", "height", "fps"):
-        if metadata.get(key) is not None:
-            technical[key] = metadata[key]
+    media_type, _metadata, technical = _metadata_for_asset(output)
     derivation: dict[str, object] = {"tool": tool, "operation": operation}
     if tool_version:
         derivation["tool_version"] = tool_version
@@ -500,7 +515,7 @@ def register_derived(
         "schema_version": "1.0.0",
         "asset_id": asset_id,
         "role": role,
-        "media_type": _media_type(metadata),
+        "media_type": media_type,
         "path": target.relative_to(ASSET_ROOT).as_posix(),
         "sha256": digest,
         "bytes": output.stat().st_size,
