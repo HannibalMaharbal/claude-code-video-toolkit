@@ -517,6 +517,14 @@ def register_derived(
         raise AssetRecordError("Parent-IDs dürfen nicht doppelt vorkommen.")
     if not tool.strip() or not operation.strip():
         raise AssetRecordError("--tool und --operation dürfen nicht leer sein.")
+    if role == "DELIVERY":
+        from tools.qc_pipeline import find_accepted_verdict
+
+        if not any(find_accepted_verdict(parent_id) for parent_id in parents):
+            raise AssetRecordError(
+                "DELIVERY abgelehnt: kein akzeptiertes QC-Verdikt (overall=accept) "
+                "fuer einen Parent-Master."
+            )
 
     parent_records = [_validated_parent(parent_id) for parent_id in parents]
     digest = sha256_file(output)

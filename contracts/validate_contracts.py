@@ -24,6 +24,7 @@ SCHEMAS = {
     "project": "project-manifest.schema.json",
     "layout": "layout-spec.schema.json",
     "routing": "task-routing.schema.json",
+    "qc_verdict": "qc-verdict.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 
@@ -49,6 +50,9 @@ def validate(kind, doc):
             missing = PERSON_VIEWS_MIN - views
             if missing:
                 errors.append(f"PERSON_LOCK-Set ohne Pflichtansichten: {sorted(missing)}")
+    if kind == "qc_verdict" and not errors:
+        if doc["retry_count"] > doc["retry_limit"]:
+            errors.append("retry_count ueberschreitet retry_limit")
     return errors
 
 

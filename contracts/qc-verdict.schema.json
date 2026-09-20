@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/qc-verdict.schema.json",
+  "title": "QC Verdict (P2)",
+  "description": "One QC run against one asset. Visual checks without a local image model are always needs_human, never a silent pass. overall=accept requires a human reviewer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "verdict_id",
+    "asset_id",
+    "created_at",
+    "checks",
+    "overall",
+    "retry_count",
+    "retry_limit"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "verdict_id": { "type": "string", "pattern": "^qcv_[a-z0-9]{12,32}$" },
+    "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "overall": { "enum": ["accept", "retry", "reject", "needs_human"] },
+    "retry_count": { "type": "integer", "minimum": 0 },
+    "retry_limit": { "type": "integer", "minimum": 0 },
+    "reviewer": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "description": "Ein akzeptiertes Verdikt braucht einen Reviewer.",
+      "if": { "properties": { "overall": { "const": "accept" } }, "required": ["overall"] },
+      "then": { "required": ["reviewer"] }
+    }
+  ],
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status"],
+      "properties": {
+        "name": {
+          "enum": [
+            "technical",
+            "product",
+            "brand",
+            "face_hands",
+            "continuity",
+            "subtitle",
+            "audio",
+            "layout"
+          ]
+        },
+        "status": { "enum": ["pass", "fail", "not_run", "needs_human"] },
+        "evidence": { "type": "string" }
+      }
+    }
+  }
+}

@@ -7,11 +7,12 @@ import pytest
 
 @pytest.fixture
 def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    from tools import asset_record, delivery_gate
+    from tools import asset_record, delivery_gate, project_init
 
     root = tmp_path / "assets"
     monkeypatch.setattr(asset_record, "ASSET_ROOT", root)
     monkeypatch.setattr(delivery_gate, "ASSET_ROOT", root)
+    monkeypatch.setattr(project_init, "PROJECTS_ROOT", tmp_path / "projects")
     monkeypatch.setattr(
         asset_record,
         "probe_media",
@@ -26,6 +27,20 @@ def registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         },
     )
     return root, asset_record, delivery_gate
+
+
+def _accept_qc(asset_id: str, *, project_id: str = "qc-project") -> None:
+    """Run the real QC pipeline end-to-end and record a genuine human accept."""
+    from tools import project_init, qc_pipeline
+
+    try:
+        project_init.load_project_manifest(project_id)
+    except project_init.ProjectInitError:
+        project_init.init_project(project_id)
+    verdict = qc_pipeline.run_qc(project_id, asset_id)
+    qc_pipeline.apply_review(
+        project_id, verdict["verdict_id"], reviewer="qa-lead", overall="accept"
+    )
 
 
 def _parent(
@@ -219,6 +234,7 @@ def test_master_from_unknown_source_is_allowed_for_internal_work(registry, tmp_p
 def test_delivery_role_creates_only_a_local_delivery_copy(registry, tmp_path: Path) -> None:
     root, asset_record, delivery_gate = registry
     parent = _parent(root, asset_record, asset_id="ast_deliveryparent", rights=_approved_rights())
+    _accept_qc(parent["asset_id"])
 
     delivery = asset_record.register_derived(
         _output(tmp_path),
@@ -231,3 +247,39 @@ def test_delivery_role_creates_only_a_local_delivery_copy(registry, tmp_path: Pa
     assert delivery["path"].startswith("delivery/")
     assert delivery["lifecycle"] == "approved"
     assert delivery_gate.check(delivery["asset_id"])["allowed"] is True
+
+
+def test_delivery_role_rejected_without_an_accepted_qc_verdict(
+    registry, tmp_path: Path
+) -> None:
+    root, asset_record, _delivery_gate = registry
+    parent = _parent(root, asset_record, asset_id="ast_noqaverdict", rights=_approved_rights())
+
+    with pytest.raises(asset_record.AssetRecordError, match="QC-Verdikt"):
+        asset_record.register_derived(
+            _output(tmp_path),
+            parents=[parent["asset_id"]],
+            role="DELIVERY",
+            tool="ffmpeg",
+            operation="export",
+        )
+
+
+def test_delivery_role_rejected_when_qc_verdict_is_needs_human(
+    registry, tmp_path: Path
+) -> None:
+    from tools import project_init, qc_pipeline
+
+    root, asset_record, _delivery_gate = registry
+    parent = _parent(root, asset_record, asset_id="ast_needshumanxx", rights=_approved_rights())
+    project_init.init_project("qc-project-2")
+    qc_pipeline.run_qc("qc-project-2", parent["asset_id"])  # no review applied -> needs_human
+
+    with pytest.raises(asset_record.AssetRecordError, match="QC-Verdikt"):
+        asset_record.register_derived(
+            _output(tmp_path),
+            parents=[parent["asset_id"]],
+            role="DELIVERY",
+            tool="ffmpeg",
+            operation="export",
+        )
