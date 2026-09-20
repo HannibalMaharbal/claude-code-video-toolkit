@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/reference-set.schema.json",
+  "title": "Reference Set (P0/P1-Vorbereitung)",
+  "description": "Stabile, gehashte Referenzliste, an die ein Lock gebunden wird. set_sha256 = SHA-256 ueber die nach asset_id sortierten Zeilen '<asset_id>:<sha256>' (LF-getrennt, ohne abschliessenden LF). Aenderung eines Members = neues Set mit neuer ID.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reference_set_id", "lock_type", "members", "set_sha256", "created_at"],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "reference_set_id": { "type": "string", "pattern": "^rset_[a-z0-9]{12,32}$" },
+    "lock_type": { "enum": ["PERSON_LOCK", "PRODUCT_LOCK", "BRAND_LOCK", "STYLE_LOCK", "SCENE_LOCK"] },
+    "label": { "type": "string" },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["asset_id", "sha256"],
+        "properties": {
+          "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "view": {
+            "enum": ["front", "profile", "three_quarter", "full_body", "hands", "neutral_pose", "expression", "detail", "label", "logo", "other"]
+          }
+        }
+      }
+    },
+    "set_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "supersedes": { "type": "string", "pattern": "^rset_[a-z0-9]{12,32}$" }
+  },
+  "allOf": [
+    {
+      "description": "Personen-Set: Mindestansichten laut Audit (Front, Profil, 3/4, Ganzkoerper, Haende, neutrale Pose, Ausdruecke). Pruefung der Vollstaendigkeit erfolgt im Validator, nicht im Schema.",
+      "if": { "properties": { "lock_type": { "const": "PERSON_LOCK" } }, "required": ["lock_type"] },
+      "then": { "properties": { "members": { "minItems": 3 } } }
+    }
+  ]
+}

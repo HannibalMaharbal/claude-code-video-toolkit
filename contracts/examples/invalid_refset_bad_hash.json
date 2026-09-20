@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0.0",
+  "reference_set_id": "rset_anna00000001",
+  "lock_type": "PERSON_LOCK",
+  "label": "Anna v1",
+  "members": [
+    {
+      "asset_id": "ast_p1p2p3p4p5p6",
+      "sha256": "f64551fcd6f07823cb87971cfb91446425da18286b3ab1ef935e0cbd7a69f68a",
+      "view": "front"
+    },
+    {
+      "asset_id": "ast_p2p3p4p5p6p7",
+      "sha256": "3946ca64ff78d93ca61090a437cbb6b3d2ca0d488f5f9ccf3059608368b27693",
+      "view": "profile"
+    },
+    {
+      "asset_id": "ast_p3p4p5p6p7p8",
+      "sha256": "43bb00d0ce7790a53b91256b370c887b24791a5539a6fbfb70c5870e8c91ae5d",
+      "view": "three_quarter"
+    }
+  ],
+  "set_sha256": "b3c3e0f503739d321aac897a01e914ee3f633a97c9fdd4ef3145c0e2ff1abaf4",
+  "created_at": "2026-09-20T12:30:00Z"
+}

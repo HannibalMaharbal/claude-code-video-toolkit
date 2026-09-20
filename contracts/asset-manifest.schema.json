@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/asset-manifest.schema.json",
+  "title": "Asset Manifest (P0)",
+  "description": "Ein Record pro Asset. Assets sind unveraenderlich: neue Bearbeitung = neues Asset mit parent_ids. Originale werden nie ueberschrieben.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "asset_id", "role", "media_type", "path",
+    "sha256", "bytes", "created_at", "lifecycle", "rights"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+    "role": {
+      "enum": ["SOURCE", "REFERENCE", "EDITABLE_SOURCE", "MASTER", "VARIANT", "DELIVERY"]
+    },
+    "reference_kind": { "enum": ["person", "product", "brand", "style", "scene"] },
+    "media_type": { "enum": ["video", "audio", "image", "document", "subtitle", "other"] },
+    "path": {
+      "type": "string",
+      "description": "Relativ zum Asset-Root (video-toolkit-media/assets). Kein fuehrender Slash, kein '..'.",
+      "pattern": "^(?!/)(?!.*\\.\\.)[^\\0]+$"
+    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "parent_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+      "uniqueItems": true
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "operation"],
+      "properties": {
+        "tool": { "type": "string" },
+        "tool_version": { "type": "string" },
+        "operation": { "type": "string" },
+        "params_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "job_id": { "type": "string" }
+      }
+    },
+    "lifecycle": {
+      "enum": ["ingested", "analysed", "approved", "qc_passed", "delivered", "rejected", "archived"]
+    },
+    "rights": { "$ref": "#/$defs/rights" },
+    "ai_involvement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ai_generated"],
+      "properties": {
+        "ai_generated": { "enum": ["none", "partial", "full", "unknown"] },
+        "generator": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+    "technical": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "duration_s": { "type": "number", "minimum": 0 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "number", "minimum": 0 },
+        "codec": { "type": "string" },
+        "container": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rights_status", "commercial_use", "person_consent", "provider_data_scope"],
+      "properties": {
+        "rights_status": {
+          "enum": ["OWNED", "LICENSED", "USER_PROVIDED", "PUBLIC_DOMAIN", "UNKNOWN", "RESTRICTED"]
+        },
+        "commercial_use": { "enum": ["allowed", "restricted", "unknown"] },
+        "person_consent": { "enum": ["not_needed", "documented", "missing", "unknown"] },
+        "provider_data_scope": { "enum": ["local", "cloud_approved", "cloud_not_approved"] },
+        "approved_providers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Nur relevant bei provider_data_scope = cloud_approved."
+        },
+        "purpose_binding": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Zweckbindung, z.B. projekt-ID oder Kampagne."
+        },
+        "edit_approval": { "type": "boolean" },
+        "license_ref": { "type": "string" },
+        "expires_at": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "provider_data_scope": { "const": "cloud_approved" } }, "required": ["provider_data_scope"] },
+          "then": { "required": ["approved_providers"], "properties": { "approved_providers": { "minItems": 1 } } }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "description": "Abgeleitete Rollen brauchen Herkunft.",
+      "if": { "properties": { "role": { "enum": ["MASTER", "VARIANT", "DELIVERY"] } }, "required": ["role"] },
+      "then": {
+        "required": ["parent_ids", "derivation"],
+        "properties": { "parent_ids": { "minItems": 1 } }
+      }
+    },
+    {
+      "description": "REFERENCE braucht reference_kind.",
+      "if": { "properties": { "role": { "const": "REFERENCE" } }, "required": ["role"] },
+      "then": { "required": ["reference_kind"] }
+    },
+    {
+      "description": "PERSON_LOCK-Referenzen: Consent, Zweckbindung und Bearbeitungsfreigabe sind Pflicht.",
+      "if": { "properties": { "reference_kind": { "const": "person" } }, "required": ["reference_kind"] },
+      "then": {
+        "properties": {
+          "rights": {
+            "required": ["purpose_binding", "edit_approval"],
+            "properties": {
+              "person_consent": { "const": "documented" },
+              "purpose_binding": { "minItems": 1 },
+              "edit_approval": { "const": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "Produkt-/Brand-Referenzen: Zweckbindung und Bearbeitungsfreigabe sind Pflicht.",
+      "if": { "properties": { "reference_kind": { "enum": ["product", "brand"] } }, "required": ["reference_kind"] },
+      "then": {
+        "properties": {
+          "rights": {
+            "required": ["purpose_binding", "edit_approval"],
+            "properties": { "purpose_binding": { "minItems": 1 }, "edit_approval": { "const": true } }
+          }
+        }
+      }
+    },
+    {
+      "description": "DELIVERY-Gate: UNKNOWN/RESTRICTED darf nie in eine Delivery-Route. KI-Angabe ist Pflicht.",
+      "if": { "properties": { "role": { "const": "DELIVERY" } }, "required": ["role"] },
+      "then": {
+        "required": ["ai_involvement"],
+        "properties": {
+          "lifecycle": { "enum": ["approved", "qc_passed", "delivered"] },
+          "ai_involvement": { "properties": { "ai_generated": { "enum": ["none", "partial", "full"] } } },
+          "rights": {
+            "properties": {
+              "rights_status": { "enum": ["OWNED", "LICENSED", "USER_PROVIDED", "PUBLIC_DOMAIN"] },
+              "commercial_use": { "const": "allowed" },
+              "person_consent": { "enum": ["not_needed", "documented"] }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

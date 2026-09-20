@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/project-manifest.schema.json",
+  "title": "Project Manifest (P0)",
+  "description": "Neue Projekte: projects/<project-id>/manifests/project.manifest.json. Das bestehende project.json (name/template/brand/created) bleibt unangetastet und wird nicht migriert.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "project_id", "created_at", "brief_ref", "asset_ids",
+    "lock_policy", "cost_decisions", "delivery_targets", "provenance_status", "ai_labeling_status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "project_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "brief_ref": { "type": "string", "description": "Relativer Pfad zu brief/." },
+    "production_spec_ref": { "type": "string", "description": "Relativer Pfad zu specs/." },
+    "asset_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+      "uniqueItems": true
+    },
+    "reference_set_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^rset_[a-z0-9]{12,32}$" },
+      "uniqueItems": true
+    },
+    "lock_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "PERSON_LOCK": { "$ref": "#/$defs/lock" },
+        "PRODUCT_LOCK": { "$ref": "#/$defs/lock" },
+        "BRAND_LOCK": { "$ref": "#/$defs/lock" },
+        "STYLE_LOCK": { "$ref": "#/$defs/lock" },
+        "SCENE_LOCK": { "$ref": "#/$defs/lock" }
+      }
+    },
+    "route_decision": {
+      "type": "object",
+      "description": "Spiegelt die Router-Response (primary, secondary, fallback, reason, locality, cost_status, availability, requires_confirmation).",
+      "additionalProperties": false,
+      "properties": {
+        "primary": { "type": "string" },
+        "secondary": { "type": "string" },
+        "fallback": { "type": "string" },
+        "reason": { "type": "string" },
+        "locality": { "type": "string" },
+        "cost_status": { "type": "string" },
+        "availability": { "type": "string" },
+        "requires_confirmation": { "type": "boolean" }
+      }
+    },
+    "cost_decisions": {
+      "type": "array",
+      "description": "Ein Eintrag pro Produktionsschritt (Kostenkaskade).",
+      "items": { "$ref": "#/$defs/cost_decision" }
+    },
+    "qc_verdict_ref": { "type": "string", "description": "Relativer Pfad zu qc/ (Schema folgt in P2)." },
+    "delivery_targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["platform", "asset_id"],
+        "properties": {
+          "platform": { "type": "string" },
+          "profile": { "type": "string" },
+          "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" }
+        }
+      }
+    },
+    "provenance_status": { "enum": ["none", "internal_hash_graph", "c2pa_unsigned_poc", "c2pa_signed"] },
+    "ai_labeling_status": { "enum": ["not_assessed", "assessed_not_required", "required_pending", "applied"] }
+  },
+  "$defs": {
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "reference_set_id": { "type": "string", "pattern": "^rset_[a-z0-9]{12,32}$" },
+        "reference_set_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "on_drift": { "enum": ["qc_fail", "warn"] }
+      },
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "required": ["reference_set_id", "reference_set_sha256", "on_drift"] }
+    },
+    "cost_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "cost_class", "known_cost", "quota_status", "fallback_reason", "approval_required"],
+      "properties": {
+        "step": { "type": "string" },
+        "cost_class": { "enum": ["cached_asset", "local_deterministic", "included_approved_surface", "external_specialist", "premium"] },
+        "known_cost": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["amount", "currency", "unit"],
+              "properties": {
+                "amount": { "type": "number", "minimum": 0 },
+                "currency": { "type": "string" },
+                "unit": { "enum": ["render", "second", "credit", "request", "flat"] }
+              }
+            }
+          ]
+        },
+        "quota_status": { "enum": ["ok", "low", "exhausted", "unknown"] },
+        "fallback_reason": { "type": ["string", "null"] },
+        "approval_required": { "type": "boolean" },
+        "approval_status": { "enum": ["pending", "approved", "denied"] },
+        "approved_by": { "type": "string" },
+        "approved_at": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "description": "Premium ist nie ohne Freigabe erlaubt und braucht eine Begruendung.",
+          "if": { "properties": { "cost_class": { "const": "premium" } }, "required": ["cost_class"] },
+          "then": {
+            "properties": { "approval_required": { "const": true }, "fallback_reason": { "type": "string", "minLength": 1 } }
+          }
+        },
+        {
+          "if": { "properties": { "approval_required": { "const": true } }, "required": ["approval_required"] },
+          "then": { "required": ["approval_status"] }
+        },
+        {
+          "if": { "properties": { "approval_status": { "const": "approved" } }, "required": ["approval_status"] },
+          "then": { "required": ["approved_by", "approved_at"] }
+        }
+      ]
+    }
+  }
+}
