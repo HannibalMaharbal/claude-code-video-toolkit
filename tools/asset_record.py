@@ -231,7 +231,8 @@ def _make_read_only(path: Path) -> None:
     path.chmod(path.stat().st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
-SOURCE_ROLES = ("SOURCE", "EDITABLE_SOURCE")
+SOURCE_ROLES = ("SOURCE", "EDITABLE_SOURCE", "REFERENCE")
+REFERENCE_KINDS = ("person", "product", "brand", "style", "scene")
 
 
 def build_asset_record(
@@ -240,12 +241,15 @@ def build_asset_record(
     digest: str,
     destination: Path,
     role: str = "SOURCE",
+    reference_kind: str | None = None,
     rights_status: str = "UNKNOWN",
     commercial_use: str = "unknown",
     person_consent: str = "unknown",
+    purpose_binding: list[str] | None = None,
+    edit_approval: bool | None = None,
     license_ref: str | None = None,
 ) -> dict[str, object]:
-    """Build, but do not persist, one SOURCE/EDITABLE_SOURCE record for a validated file."""
+    """Build, but do not persist, one SOURCE/EDITABLE_SOURCE/REFERENCE record."""
     media_type, metadata, technical = _metadata_for_asset(source)
     asset_id = asset_id_for_sha256(digest)
     relative_path = destination.resolve().relative_to(ASSET_ROOT.resolve()).as_posix()
@@ -257,7 +261,11 @@ def build_asset_record(
     }
     if license_ref:
         rights["license_ref"] = license_ref
-    return {
+    if purpose_binding:
+        rights["purpose_binding"] = purpose_binding
+    if edit_approval is not None:
+        rights["edit_approval"] = edit_approval
+    record: dict[str, object] = {
         "schema_version": "1.0.0",
         "asset_id": asset_id,
         "role": role,
@@ -271,20 +279,28 @@ def build_asset_record(
         "ai_involvement": {"ai_generated": "unknown"},
         "technical": technical,
     }
+    if reference_kind:
+        record["reference_kind"] = reference_kind
+    return record
 
 
 def register_asset(
     source: Path | str,
     *,
     role: str = "SOURCE",
+    reference_kind: str | None = None,
     rights_status: str = "UNKNOWN",
     commercial_use: str = "unknown",
     person_consent: str = "unknown",
+    purpose_binding: list[str] | None = None,
+    edit_approval: bool | None = None,
     license_ref: str | None = None,
 ) -> dict[str, object]:
-    """Copy one imported file into immutable SOURCE/EDITABLE_SOURCE storage and record it once."""
+    """Copy one imported file into immutable SOURCE/EDITABLE_SOURCE/REFERENCE storage."""
     if role not in SOURCE_ROLES:
         raise AssetRecordError(f"--role muss eine von {SOURCE_ROLES} sein.")
+    if reference_kind is not None and reference_kind not in REFERENCE_KINDS:
+        raise AssetRecordError(f"reference_kind muss eine von {REFERENCE_KINDS} sein.")
     source = Path(source).expanduser().resolve()
     if not source.is_file() or source.stat().st_size <= 0:
         raise AssetRecordError("Zu registrierendes Asset fehlt oder ist leer.")
@@ -305,9 +321,12 @@ def register_asset(
         digest=digest,
         destination=target,
         role=role,
+        reference_kind=reference_kind,
         rights_status=rights_status,
         commercial_use=commercial_use,
         person_consent=person_consent,
+        purpose_binding=purpose_binding,
+        edit_approval=edit_approval,
         license_ref=license_ref,
     )
     errors = validate("asset", record)

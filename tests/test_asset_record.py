@@ -133,6 +133,56 @@ def test_register_asset_rejects_unknown_role(asset_record, tmp_path: Path) -> No
         asset_record.register_asset(spec, role="MASTER")
 
 
+def test_register_reference_person_with_full_consent_validates(
+    asset_record, tmp_path: Path
+) -> None:
+    from PIL import Image
+
+    from contracts.validate_contracts import validate
+
+    image_path = tmp_path / "face-front.png"
+    Image.new("RGB", (10, 10), (1, 2, 3)).save(image_path)
+
+    record = asset_record.register_asset(
+        image_path,
+        role="REFERENCE",
+        reference_kind="person",
+        person_consent="documented",
+        purpose_binding=["proj-demo-001"],
+        edit_approval=True,
+    )
+
+    assert record["role"] == "REFERENCE"
+    assert record["reference_kind"] == "person"
+    assert record["rights"]["person_consent"] == "documented"
+    assert record["rights"]["purpose_binding"] == ["proj-demo-001"]
+    assert record["rights"]["edit_approval"] is True
+    assert validate("asset", record) == []
+
+
+def test_register_reference_person_without_consent_is_rejected(
+    asset_record, tmp_path: Path
+) -> None:
+    from PIL import Image
+
+    image_path = tmp_path / "face-front.png"
+    Image.new("RGB", (10, 10), (1, 2, 3)).save(image_path)
+
+    with pytest.raises(asset_record.AssetRecordError, match="Schema"):
+        asset_record.register_asset(image_path, role="REFERENCE", reference_kind="person")
+    assert not list(asset_record.ASSET_ROOT.rglob("*"))
+
+
+def test_register_asset_rejects_unknown_reference_kind(asset_record, tmp_path: Path) -> None:
+    image_path = tmp_path / "face.png"
+    from PIL import Image
+
+    Image.new("RGB", (10, 10), (1, 2, 3)).save(image_path)
+
+    with pytest.raises(asset_record.AssetRecordError, match="reference_kind"):
+        asset_record.register_asset(image_path, role="REFERENCE", reference_kind="alien")
+
+
 def test_register_image_reports_dimensions(asset_record, tmp_path: Path) -> None:
     from PIL import Image
 
