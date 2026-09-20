@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-09-20T18:05:23.840661+00:00",
+  "versions": {
+    "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers",
+    "yt_dlp": "2026.08.19",
+    "node": "v22.22.2",
+    "python": "Python 3.12.14",
+    "remotion": null,
+    "ollama": "ollama version is 0.34.2",
+    "whisper": "0.4.3",
+    "ollama_models": [
+      "localhost/gemma-code:latest    db574abcd08b    9.6 GB    30 hours ago    ",
+      "devstral-small-2:latest        24277f07f62d    15 GB     2 days ago      ",
+      "gpt-oss:20b-cloud              9a01793d9ef8    -         7 days ago      ",
+      "gpt-oss:120b-cloud             ac7f7a1e7785    -         7 days ago      ",
+      "gemma4:31b-cloud               ef09f235533c    -         9 days ago      ",
+      "gemma4:26b-a4b-it-qat          2dd70431afed    15 GB     13 days ago     ",
+      "gemma-code:latest              db574abcd08b    9.6 GB    13 days ago     "
+    ]
+  },
+  "minimum_versions": {}
+}

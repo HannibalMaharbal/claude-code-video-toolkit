@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-09-20T18:07:25.156755+00:00",
+  "results": [
+    {
+      "capability": "F01",
+      "status": "PASS",
+      "reason": "Pillow-Transformationen und drei Formate gerendert.",
+      "measurements": {
+        "size": [
+          300,
+          200
+        ],
+        "alpha_range": [
+          180,
+          180
+        ],
+        "formats": [
+          "png",
+          "jpg",
+          "webp"
+        ]
+      },
+      "duration_s": 0.998
+    },
+    {
+      "capability": "F02",
+      "status": "MISSING",
+      "reason": "Kein vorhandener, allgemeiner Bild-Text-Renderer mit Spec-JSON-Vertrag gefunden.",
+      "measurements": {},
+      "duration_s": 0.0
+    },
+    {
+      "capability": "F03",
+      "status": "MISSING",
+      "reason": "Kein vorhandener Flyer-/Poster-Renderer mit Vorlage, A4/A5-Spec und PDF+PNG-Export gefunden.",
+      "measurements": {},
+      "duration_s": 0.0
+    },
+    {
+      "capability": "F04",
+      "status": "PASS",
+      "reason": "Trim/Concat mit Audio gerendert.",
+      "measurements": {
+        "duration_s": 1.833333,
+        "expected_s": 1.8,
+        "fps": 30.0
+      },
+      "duration_s": 0.226
+    },
+    {
+      "capability": "F05",
+      "status": "PASS",
+      "reason": "Reframe, Tempo, XFade-Blende und Overlay gerendert.",
+      "measurements": {
+        "width": 1080,
+        "height": 1920,
+        "duration_s": 2.702521
+      },
+      "duration_s": 0.296
+    },
+    {
+      "capability": "F06",
+      "status": "PASS",
+      "reason": "Silence-Cutter auf lokales Pausenmaterial angewendet.",
+      "measurements": {
+        "silences": 1,
+        "segments": 2,
+        "duration_s": 1.433333
+      },
+      "duration_s": 0.28
+    },
+    {
+      "capability": "F07",
+      "status": "PASS",
+      "reason": "Sprache/Musik, Fades, Normalisierung und M4A-Konvertierung geprüft.",
+      "measurements": {
+        "loudness_lufs": -15.7,
+        "codec": "aac",
+        "duration_s": 3.0
+      },
+      "duration_s": 0.174
+    },
+    {
+      "capability": "F08",
+      "status": "PASS",
+      "reason": "Lokale Kokoro-Ausgabe für Deutsch und Englisch erzeugt.",
+      "measurements": {
+        "de_duration_s": 3.63,
+        "en_duration_s": 2.22
+      },
+      "duration_s": 2.844
+    },
+    {
+      "capability": "F09",
+      "status": "PASS",
+      "reason": "Deutsch und Englisch lokal mit zeitgestempelten Segmenten transkribiert.",
+      "measurements": {
+        "segments": {
+          "de": 1,
+          "en": 1
+        }
+      },
+      "duration_s": 3.953
+    },
+    {
+      "capability": "F10",
+      "status": "MISSING",
+      "reason": "SRT/VTT validiert, aber Burn-In fehlt: Der installierte FFmpeg-Build enthält keinen subtitles/libass-Filter. Remotion-Alternative ist nicht als Renderer implementiert.",
+      "measurements": {},
+      "duration_s": 0.024
+    },
+    {
+      "capability": "F11",
+      "status": "PASS",
+      "reason": "Lokale Ollama-Übersetzung Deutsch→Englisch→Deutsch mit stabilen Zeitcodes.",
+      "measurements": {
+        "model": "gemma-code:latest",
+        "cues": 1
+      },
+      "duration_s": 9.075
+    },
+    {
+      "capability": "F12",
+      "status": "MISSING",
+      "reason": "Routing-Tabelle docs/KI-SYSTEM-ROUTING.md fehlt.",
+      "measurements": {},
+      "duration_s": 0.0
+    },
+    {
+      "capability": "F13",
+      "status": "PASS",
+      "reason": "Versionen erfasst und Startwert angelegt.",
+      "measurements": {
+        "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers",
+        "yt_dlp": "2026.08.19",
+        "node": "v22.22.2",
+        "python": "Python 3.12.14",
+        "remotion": null,
+        "ollama": "ollama version is 0.34.2",
+        "whisper": "0.4.3",
+        "ollama_models": [
+          "localhost/gemma-code:latest    db574abcd08b    9.6 GB    30 hours ago    ",
+          "devstral-small-2:latest        24277f07f62d    15 GB     2 days ago      ",
+          "gpt-oss:20b-cloud              9a01793d9ef8    -         7 days ago      ",
+          "gpt-oss:120b-cloud             ac7f7a1e7785    -         7 days ago      ",
+          "gemma4:31b-cloud               ef09f235533c    -         9 days ago      ",
+          "gemma4:26b-a4b-it-qat          2dd70431afed    15 GB     13 days ago     ",
+          "gemma-code:latest              db574abcd08b    9.6 GB    13 days ago     "
+        ]
+      },
+      "duration_s": 1.156
+    },
+    {
+      "capability": "F14",
+      "status": "MISSING",
+      "reason": "Pipeline ausgeführt, aber Asset-Registry klassifiziert/registriert SRT/VTT und Transcript nicht als abgeleitete Text-Assets; daher nicht alle Ergebnisse mit parent_ids registrierbar.",
+      "measurements": {
+        "media_records": 3,
+        "subtitle_cues": 2,
+        "release_dry_run_allowed": false
+      },
+      "duration_s": 6.559
+    },
+    {
+      "capability": "F15",
+      "status": "PASS",
+      "reason": "Bestehende Egress- und Delivery-Gate-Tests bestanden.",
+      "measurements": {
+        "pytest": "..............                                                           [100%]\n14 passed in 0.16s"
+      },
+      "duration_s": 0.357
+    }
+  ],
+  "pass_count": 10,
+  "total": 15,
+  "complete": false
+}
