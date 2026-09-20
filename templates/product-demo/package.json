@@ -16,13 +16,13 @@
   },
   "dependencies": {
     "@video-toolkit/remotion-shared": "1.0.0",
-    "@remotion/cli": "4.0.520",
-    "@remotion/paths": "4.0.520",
-    "@remotion/shapes": "4.0.520",
-    "@remotion/transitions": "4.0.520",
+    "@remotion/cli": "4.0.526",
+    "@remotion/paths": "4.0.526",
+    "@remotion/shapes": "4.0.526",
+    "@remotion/transitions": "4.0.526",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "4.0.520"
+    "remotion": "4.0.526"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

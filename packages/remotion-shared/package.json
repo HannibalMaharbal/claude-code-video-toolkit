@@ -17,9 +17,9 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@remotion/transitions": "4.0.520",
+    "@remotion/transitions": "4.0.526",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "remotion": "4.0.520"
+    "remotion": "4.0.526"
   }
 }

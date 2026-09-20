@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -622,14 +623,39 @@ def _version(command: list[str]) -> str | None:
     return line[0] if line else None
 
 
+def _remotion_versions(remotion_bin: Path) -> dict[str, Any]:
+    """Report Remotion's own version plus whether every @remotion/* package agrees."""
+    if not remotion_bin.is_file():
+        return {"version": None, "consistent": False}
+    try:
+        result = _run([str(remotion_bin), "versions"], timeout=60)
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return {"version": None, "consistent": False}
+    output = result.stdout
+    match = re.search(r"On version:\s*(\d+(?:\.\d+)+)", output)
+    return {
+        "version": match.group(1) if match else None,
+        "consistent": "All packages have the correct version." in output,
+    }
+
+
+def _playwright_version() -> str | None:
+    try:
+        return importlib.metadata.version("playwright")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 def _stack_versions() -> dict[str, Any]:
-    remotion = ROOT / "node_modules" / ".bin" / "remotion"
+    remotion_info = _remotion_versions(ROOT / "node_modules" / ".bin" / "remotion")
     versions: dict[str, Any] = {
         "ffmpeg": _version(["ffmpeg", "-version"]),
         "yt_dlp": _version(["yt-dlp", "--version"]),
         "node": _version(["node", "--version"]),
         "python": _version([sys.executable, "--version"]),
-        "remotion": _version([str(remotion), "--version"]) if remotion.is_file() else None,
+        "remotion": remotion_info["version"],
+        "remotion_consistent": remotion_info["consistent"],
+        "playwright": _playwright_version(),
         "ollama": _version(["ollama", "--version"]),
     }
     try:
@@ -641,6 +667,30 @@ def _stack_versions() -> dict[str, Any]:
     except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         versions["ollama_models"] = []
     return versions
+
+
+def _parse_version(text: str | None) -> tuple[int, ...] | None:
+    if not text:
+        return None
+    match = re.search(r"\d+(?:\.\d+)+", text)
+    if not match:
+        return None
+    return tuple(int(part) for part in match.group().split("."))
+
+
+def _version_ok(actual: str | None, constraint: str) -> bool:
+    """Compare a live version string against a `>=X.Y.Z` or `==X.Y.Z` constraint."""
+    match = re.match(r"^(==|>=)(\d+(?:\.\d+)*)$", constraint)
+    if not match:
+        raise RuntimeError(f"Ungültige Versionsvorgabe in stack-manifest.json: {constraint!r}")
+    operator, required_text = match.group(1), match.group(2)
+    required = tuple(int(part) for part in required_text.split("."))
+    actual_version = _parse_version(actual)
+    if actual_version is None:
+        return False
+    if operator == "==":
+        return actual_version == required
+    return actual_version >= required
 
 
 def _f13(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
@@ -660,6 +710,7 @@ def _f13(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
             encoding="utf-8",
         )
         action = "Startwert angelegt"
+        minimums: dict[str, str] = {}
     else:
         manifest = json.loads(STACK_MANIFEST.read_text(encoding="utf-8"))
         action = (
@@ -667,10 +718,33 @@ def _f13(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
             if manifest.get("versions")
             else "Manifest ohne Versionsblock"
         )
+        minimums = manifest.get("minimum_versions", {})
+
     missing = [name for name in ("ffmpeg", "node", "python") if not versions.get(name)]
     if missing:
         raise MissingCapability("Erforderliche Stack-Komponente fehlt: " + ", ".join(missing))
-    return f"Versionen erfasst und {action}.", versions
+
+    failures: list[str] = []
+    warnings: list[str] = []
+    for name, constraint in minimums.items():
+        actual = versions.get(name)
+        if not actual:
+            if name == "ollama":
+                warnings.append(f"{name}: Version nicht ermittelbar (WARN, kein Hard-Fail).")
+                continue
+            failures.append(f"{name}: Version nicht ermittelbar, Minimum {constraint}.")
+            continue
+        if not _version_ok(actual, constraint):
+            failures.append(f"{name}: Ist {actual!r} erfüllt nicht {constraint}.")
+    if minimums.get("remotion") and versions.get("remotion") and not versions.get("remotion_consistent"):
+        failures.append("remotion: @remotion/*-Pakete sind laut `remotion versions` nicht konsistent.")
+
+    if failures:
+        raise RuntimeError("; ".join(failures))
+    reason = f"Versionen erfasst und {action}; alle Mindestversionen erfüllt."
+    if warnings:
+        reason = f"{reason} {' '.join(warnings)}"
+    return reason, {**versions, "minimum_versions": minimums, "warnings": warnings}
 
 
 def _f14(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
