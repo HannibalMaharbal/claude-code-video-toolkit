@@ -3,6 +3,16 @@ name: ltx2
 description: AI video generation with LTX-2.3 22B — text-to-video, image-to-video clips for video production. Use when generating video clips, animating images, creating b-roll, animated backgrounds, or motion content. Triggers include video generation, animate image, b-roll, motion, video clip, text-to-video, image-to-video.
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft einen
+> Cloud-/Setup-/bezahlten Provider direkt auf (Modal, A100-80GB) und ist
+> **DEPRECATED FROM ACTIVE ROUTING** — nicht gelöscht, historische Dokumentation
+> unverändert. **Nicht automatisch ausführen.** Zwingend: Claude Router →
+> Video-Governance-Gate (Kosten, Lizenz, Datenschutz, Account, Credits) →
+> ausdrückliche Constantin-Freigabe. Reaktivierung nur nach erneuter Prüfung
+> (Routing §14.14). Aktive Alternativen: lokal über FFmpeg/Remotion; für
+> generative Videoerzeugung gibt es aktuell keinen aktiven Pfad (Higgsfield nur
+> nach Gate-Freigabe).
+
 # LTX-2.3 Video Generation
 
 Generate ~5 second video clips from text prompts or images using the LTX-2.3 22B DiT model.

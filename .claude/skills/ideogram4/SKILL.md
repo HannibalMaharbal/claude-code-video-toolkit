@@ -3,6 +3,15 @@ name: ideogram4
 description: Prompting patterns for Ideogram 4 text-to-image — best-in-class in-image text rendering and exact color/layout control via structured JSON captions. Use when generating images that need legible on-image text (title cards, thumbnails, logos, signage, CTAs), precise brand colors, or controlled spatial layout. Triggers include title slide image, thumbnail with text, on-image text, legible text in image, brand color palette image, bounding-box layout, Ideogram.
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft eine
+> kostenpflichtige gehostete API direkt auf (Ideogram 4) und ist **OUTSIDE ACTIVE
+> VIDEO SYSTEM** — im Bild-Router bereits OUTSIDE SYSTEM (Routing §13), hierfür auch
+> nicht ins aktive Video-Routing aufgenommen. Nicht gelöscht, historische
+> Dokumentation unverändert. **Nicht automatisch ausführen.** Zwingend: Claude
+> Router → Video-Governance-Gate (Kosten, Lizenz, Datenschutz, Account, Credits) →
+> ausdrückliche Constantin-Freigabe. Reaktivierung nur nach erneuter Prüfung
+> (Routing §14.14). Aktive Alternative: Canva (aktiv) für Text-/Branding-Assets.
+
 # Ideogram 4 Skill
 
 Text-to-image generation with **Ideogram 4** (9.3B, open-weight, released June 2026). Its

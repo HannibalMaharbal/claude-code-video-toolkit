@@ -3,6 +3,15 @@ name: acestep
 description: AI music generation with ACE-Step 1.5 — background music, vocal tracks, covers, stem extraction, audio repainting, and continuation for video production. Use when generating music, soundtracks, jingles, or working with audio stems. Triggers include background music, soundtrack, jingle, music generation, stem extraction, cover, style transfer, repaint, continuation, or musical composition tasks.
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft
+> Cloud-/Setup-Pfade direkt auf (acemusic-API, Modal/RunPod-Fallback) und ist
+> **DEPRECATED FROM ACTIVE ROUTING** (Kosten-/Accountstatus UNKNOWN) — nicht
+> gelöscht, historische Dokumentation unverändert. **Nicht automatisch ausführen.**
+> Zwingend: Claude Router → Video-Governance-Gate (Kosten, Lizenz, Datenschutz,
+> Account, Credits) → ausdrückliche Constantin-Freigabe. Reaktivierung nur nach
+> erneuter Prüfung (Routing §14.14). Aktive Alternative: lokal — lizenzgeprüfte
+> Bestands-Audios via FFmpeg; kein aktiver Musikgenerierungsweg.
+
 # ACE-Step 1.5 Music Generation
 
 Open-source music generation via `tools/music_gen.py`.

@@ -7,7 +7,7 @@
     "remotion-official": {
       "path": ".claude/skills/remotion-official/",
       "description": "Official Remotion framework knowledge (synced from remotion-dev/skills)",
-      "status": "stable",
+      "status": "beta",
       "upstream": "https://github.com/remotion-dev/skills",
       "created": "2026-02-19",
       "updated": "2026-02-19"
@@ -643,11 +643,64 @@
       "updated": "2026-04-04"
     },
     "transcribe": {
-      "description": "Free audio/video transcription using mlx-whisper (Apple Silicon optimized)",
+      "description": "Free local audio/video transcription plus SRT/VTT generation and deterministic subtitle QC using mlx-whisper (Apple Silicon optimized)",
       "path": "tools/transcribe.py",
       "status": "stable",
       "free": true,
-      "requires": "mlx-whisper",
+      "requires": "mlx-whisper; optional FFmpeg subtitles/libass filter for burned subtitles",
+      "usage": "python tools/transcribe.py --input video.mp4 --json --srt captions.srt --vtt captions.vtt --subtitle-qc",
+      "options": {
+        "--transcript-json": "Existing mlx-whisper-compatible timestamp JSON; creates subtitles without rerunning transcription",
+        "--srt": "Write QC-passed UTF-8 SRT",
+        "--vtt": "Write QC-passed UTF-8 WebVTT",
+        "--subtitle-qc": "Run local structure, timing, overlap, duration and line-length QC",
+        "--subtitle-file": "QC an existing SRT/VTT file",
+        "--burn-in": "Optional video input for FFmpeg subtitle burn-in when the local filter is available",
+        "--burn-in-output": "Output path required with --burn-in"
+      },
+      "env_vars": []
+    },
+    "video_ingest": {
+      "path": "tools/video_ingest.py",
+      "description": "Safe local ingest and deterministic technical analysis for local media, direct public media URLs and public single-video YouTube/Instagram URLs",
+      "usage": "python tools/video_ingest.py --source video.mp4 --output-dir output/ingest --audio --transcribe --srt --vtt --frames --max-frames 12",
+      "status": "beta",
+      "free": true,
+      "requires": "ffprobe and FFmpeg; yt-dlp only for public platform URLs; cached local mlx-whisper model only with --transcribe",
+      "limitations": [
+        "No DRM, login, cookie, credential, paywall or access-control bypass",
+        "YouTube playlists and channel URLs are rejected",
+        "Public platform availability depends on the installed yt-dlp and is separately integration-tested"
+      ],
+      "options": {
+        "--metadata-only": "Validate and write only deterministic technical metadata",
+        "--audio": "Extract local audio.m4a",
+        "--transcribe": "Run cached local MLX Whisper and write transcript.json",
+        "--srt": "Write QC-passed subtitles.srt; requires --transcribe",
+        "--vtt": "Write QC-passed subtitles.vtt; requires --transcribe",
+        "--frames": "Extract bounded JPEG frames",
+        "--frame-interval": "Seconds between extracted frames",
+        "--max-frames": "Hard maximum count for extracted frames"
+      },
+      "env_vars": []
+    },
+    "video_analyze": {
+      "path": "tools/video_analyze.py",
+      "description": "Deterministic local scene, transcript, silence and clip-candidate analysis for an existing ingest package",
+      "usage": "python tools/video_analyze.py --input output/ingest --scenes --align-transcript --clip-candidates",
+      "status": "stable",
+      "free": true,
+      "requires": "FFmpeg scene and frame filters; existing ingest package; optional transcript.json and audio stream",
+      "limitations": [
+        "Only measured technical features; semantic_analysis remains not_run",
+        "One controlled representative frame is emitted per detected scene",
+        "Clip and chapter entries are candidates, not creative or viral rankings"
+      ],
+      "options": {
+        "--scene-threshold": "Local FFmpeg visual scene-change threshold between 0 and 1",
+        "--min-clip-duration": "Minimum deterministic clip-candidate duration in seconds",
+        "--max-clip-duration": "Maximum deterministic clip-candidate duration in seconds"
+      },
       "env_vars": []
     },
     "kokoro_tts": {

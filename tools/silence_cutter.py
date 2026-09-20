@@ -739,7 +739,7 @@ def main() -> int:
         epilog=__doc__,
     )
     ap.add_argument("--input", "-i", required=True, help="Input video file")
-    ap.add_argument("--output", "-o", required=True, help="Output video file")
+    ap.add_argument("--output", "-o", help="Output video file (required unless --plan-only)")
     ap.add_argument("--noise", default="-30dB", help="Silence noise threshold (default: -30dB)")
     ap.add_argument(
         "--min-duration",
@@ -780,10 +780,21 @@ def main() -> int:
     )
     ap.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     ap.add_argument("--json", action="store_true", help="Output segments and verification as JSON")
+    ap.add_argument("--plan-only", action="store_true", help="Only analyze cuts; do not create an output file")
+    ap.add_argument(
+        "--remove-silence-index",
+        action="append",
+        type=int,
+        default=None,
+        help="Remove only this detected silence index (repeatable; zero-based)",
+    )
     args = ap.parse_args()
 
     input_path = args.input
     output_path = args.output
+
+    if not output_path and not args.plan_only:
+        ap.error("--output is required unless --plan-only is used")
 
     if not Path(input_path).exists():
         print(f"Error: Input file not found: {input_path}", file=sys.stderr)
@@ -809,13 +820,21 @@ def main() -> int:
     )
     print(f"Found {len(silences)} silence region(s)", file=sys.stderr)
 
+    selected_indices = list(range(len(silences)))
+    if args.remove_silence_index is not None:
+        selected_indices = sorted(set(args.remove_silence_index))
+        if not selected_indices or any(index < 0 or index >= len(silences) for index in selected_indices):
+            print("Error: invalid silence index selection", file=sys.stderr)
+            return 1
+    selected_silences = [silences[index] for index in selected_indices]
+
     if args.verbose:
         for s in silences:
             print(f"  Silence: {s.start:.3f}s - {s.end:.3f}s ({s.duration:.3f}s)", file=sys.stderr)
 
     # Step 4: Compute cut segments from silences
     segments = compute_segments(
-        silences,
+        selected_silences,
         video_duration,
         word_pad=args.word_pad,
         words=words,
@@ -843,16 +862,21 @@ def main() -> int:
         print(
             json.dumps(
                 {
+                    "duration": video_duration,
                     "segments": [{"start": s.start, "end": s.end} for s in segments],
                     "silences": [
                         {"start": s.start, "end": s.end, "duration": s.duration} for s in silences
                     ],
+                    "selected_silence_indices": selected_indices,
                     "mode": "copy" if args.copy else "reencode",
                 },
                 ensure_ascii=False,
                 indent=2,
             )
         )
+
+    if args.plan_only:
+        return 0
 
     success = cut_segments(
         input_path,

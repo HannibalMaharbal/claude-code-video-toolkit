@@ -3,6 +3,14 @@ name: runpod
 description: Cloud GPU processing via RunPod serverless. Use when setting up RunPod endpoints, deploying Docker images, managing GPU resources, troubleshooting endpoint issues, or understanding costs. Covers all 5 toolkit images (qwen-edit, realesrgan, propainter, sadtalker, qwen3-tts).
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft Cloud-GPU
+> direkt auf (RunPod serverless, bezahlte Jobs) und ist **DEPRECATED FROM ACTIVE
+> ROUTING** — nicht gelöscht, historische Dokumentation unverändert. **Nicht
+> automatisch ausführen.** Zwingend: Claude Router → Video-Governance-Gate (Kosten,
+> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Constantin-Freigabe.
+> Reaktivierung nur nach erneuter Prüfung (Routing §14.14). Aktive Alternativen:
+> lokal — FFmpeg (Schnitt/Stille), MLX Whisper (Transkription), Kokoro (TTS).
+
 # RunPod Cloud GPU
 
 Run open-source AI models on cloud GPUs via RunPod serverless. Pay-per-second, no minimums.

@@ -3,6 +3,14 @@ name: qwen-edit
 description: AI image editing prompting patterns for Qwen-Image-Edit. Use when editing photos while preserving identity, reframing cropped images, changing clothing or accessories, adjusting poses, applying style transfers, or character transformations. Provides prompt patterns, parameter tuning, and examples.
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft Cloud-GPU
+> direkt auf (Qwen-Image-Edit-2511 via RunPod serverless) und ist **DEPRECATED FROM
+> ACTIVE ROUTING** — nicht gelöscht, historische Dokumentation unverändert. **Nicht
+> automatisch ausführen.** Zwingend: Claude Router → Video-Governance-Gate (Kosten,
+> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Constantin-Freigabe.
+> Reaktivierung nur nach erneuter Prüfung (Routing §14.14). Aktive Alternative:
+> Canva (aktiv) für Bild-Finish/Freisteller; kein aktiver lokaler Cloud-Bildpfad.
+
 # Qwen-Image-Edit Skill
 
 AI-powered image editing using Qwen-Image-Edit-2511 via RunPod serverless.

@@ -3,6 +3,14 @@ name: elevenlabs
 description: Generate AI voiceovers, sound effects, and music using ElevenLabs APIs. Use when creating audio content for videos, podcasts, or games. Triggers include generating voiceovers, narration, dialogue, sound effects from descriptions, background music, soundtrack generation, voice cloning, or any audio synthesis task.
 ---
 
+> **Video-Governance-Sperre (19.09.2026, Routing §14):** Dieser Skill ruft eine
+> kostenpflichtige API direkt auf (ElevenLabs, `ELEVENLABS_API_KEY`) und ist
+> **DEPRECATED FROM ACTIVE ROUTING** — nicht gelöscht, historische Dokumentation
+> unverändert. **Nicht automatisch ausführen.** Zwingend: Claude Router →
+> Video-Governance-Gate (Kosten, Lizenz, Datenschutz, Account, Credits) →
+> ausdrückliche Constantin-Freigabe. Reaktivierung nur nach erneuter Prüfung
+> (Routing §14.14). Aktive Alternative: **Kokoro (lokal, kostenfrei).**
+
 # ElevenLabs Audio Generation
 
 Requires `ELEVENLABS_API_KEY` in `.env`.
