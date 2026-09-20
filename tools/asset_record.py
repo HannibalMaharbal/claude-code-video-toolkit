@@ -504,6 +504,7 @@ def register_derived(
     operation: str,
     tool_version: str | None = None,
     job_id: str | None = None,
+    params_sha256: str | None = None,
 ) -> dict[str, object]:
     """Register a local, immutable derivative after validating all parent assets."""
     output = Path(output_path).expanduser().resolve()
@@ -556,6 +557,8 @@ def register_derived(
         derivation["tool_version"] = tool_version
     if job_id:
         derivation["job_id"] = job_id
+    if params_sha256:
+        derivation["params_sha256"] = params_sha256
     record: dict[str, object] = {
         "schema_version": "1.0.0",
         "asset_id": asset_id,
@@ -623,6 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
     derived_parser.add_argument("--operation", required=True)
     derived_parser.add_argument("--tool-version")
     derived_parser.add_argument("--job-id")
+    derived_parser.add_argument("--params-sha256")
     return parser
 
 
@@ -648,6 +652,7 @@ def main() -> int:
                 operation=args.operation,
                 tool_version=args.tool_version,
                 job_id=args.job_id,
+                params_sha256=args.params_sha256,
             )
     except AssetRecordError as error:
         print(f"Asset-Rechte: ERROR — {error}", file=sys.stderr)
