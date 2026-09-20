@@ -33,7 +33,7 @@ REPORT_STEM = f"ACCEPTANCE-{date.today().isoformat()}"
 REPORT_MARKDOWN = ROOT / "docs" / f"{REPORT_STEM}.md"
 REPORT_JSON = ROOT / "docs" / f"{REPORT_STEM}.json"
 STACK_MANIFEST = ROOT / "contracts" / "stack-manifest.json"
-CAPABILITY_IDS = tuple(f"F{number:02d}" for number in range(1, 16))
+CAPABILITY_IDS = tuple(f"F{number:02d}" for number in range(1, 20))
 
 
 @dataclass(frozen=True)
@@ -926,6 +926,252 @@ def _f15(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
     }
 
 
+def _f16(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Reference locks: create/verify a set, bind it, and reject a tampered member."""
+    import stat as stat_module
+
+    from PIL import Image
+
+    from tools import asset_record, job_spec, project_init, reference_registry
+
+    asset_root = work / "asset-store-f16"
+    previous = {
+        "asset_record": asset_record.ASSET_ROOT,
+        "refreg_asset": reference_registry.ASSET_ROOT,
+        "refreg_refset": reference_registry.REFSET_ROOT,
+        "projects": project_init.PROJECTS_ROOT,
+    }
+    asset_record.ASSET_ROOT = asset_root
+    reference_registry.ASSET_ROOT = asset_root
+    reference_registry.REFSET_ROOT = asset_root / "references" / "sets"
+    project_init.PROJECTS_ROOT = work / "projects-f16"
+    try:
+
+        def _register_person(name: str, color: tuple[int, int, int]) -> dict[str, Any]:
+            path = work / f"person-{name}.png"
+            Image.new("RGB", (10, 10), color).save(path)
+            return asset_record.register_asset(
+                path,
+                role="REFERENCE",
+                reference_kind="person",
+                person_consent="documented",
+                purpose_binding=["acceptance-locks"],
+                edit_approval=True,
+            )
+
+        front = _register_person("front", (10, 20, 30))
+        profile = _register_person("profile", (40, 50, 60))
+        three_quarter = _register_person("three-quarter", (70, 80, 90))
+        members = [
+            {"asset_id": front["asset_id"], "view": "front"},
+            {"asset_id": profile["asset_id"], "view": "profile"},
+            {"asset_id": three_quarter["asset_id"], "view": "three_quarter"},
+        ]
+        refset = reference_registry.create_set("PERSON_LOCK", "Acceptance Person", members)
+        reference_registry.verify_set(refset["reference_set_id"])
+
+        project_init.init_project("acceptance-locks")
+        reference_registry.bind_project(
+            "acceptance-locks", refset["reference_set_id"], "PERSON_LOCK"
+        )
+        job, _job_path = job_spec.build_and_write("acceptance-locks", "image_edit")
+        if "PERSON_LOCK" not in job["locks"]:
+            raise RuntimeError("Job-Spec enthält den aktiven Lock nicht.")
+
+        front_record, _ = asset_record.load_asset_record(front["asset_id"])
+        front_path = asset_root / str(front_record["path"])
+        front_path.chmod(front_path.stat().st_mode | stat_module.S_IWUSR)
+        front_path.write_bytes(b"tampered bytes, different content")
+
+        try:
+            reference_registry.verify_set(refset["reference_set_id"])
+            raise RuntimeError("verify_set erkannte die Manipulation nicht.")
+        except reference_registry.ReferenceRegistryError:
+            pass
+        try:
+            job_spec.build("acceptance-locks", "image_edit")
+            raise RuntimeError("job_spec.build lehnte den manipulierten Lock nicht ab.")
+        except job_spec.JobSpecError:
+            pass
+    finally:
+        asset_record.ASSET_ROOT = previous["asset_record"]
+        reference_registry.ASSET_ROOT = previous["refreg_asset"]
+        reference_registry.REFSET_ROOT = previous["refreg_refset"]
+        project_init.PROJECTS_ROOT = previous["projects"]
+
+    return (
+        "PERSON_LOCK-Set angelegt/verifiziert/gebunden, Job enthält den Lock; ein nach "
+        "der Registrierung manipuliertes Member wird von verify_set und job_spec.build "
+        "abgelehnt.",
+        {"reference_set_id": refset["reference_set_id"], "job_id": job["job_id"]},
+    )
+
+
+def _f17(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """QC verdicts: technical checks, DELIVERY gate, human review, retry limit."""
+    from tools import asset_record, project_init, qc_pipeline
+
+    previous = (asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT)
+    asset_record.ASSET_ROOT = work / "asset-store-f17"
+    project_init.PROJECTS_ROOT = work / "projects-f17"
+    try:
+        project_init.init_project("acceptance-qc")
+        source = asset_record.register_asset(
+            material["video"],
+            ai_generated="none",
+            rights_status="OWNED",
+            commercial_use="allowed",
+            person_consent="not_needed",
+        )
+        cut = work / "f17-master.mp4"
+        _run(
+            [
+                "ffmpeg", "-y", "-ss", "0", "-t", "1", "-i", str(material["video"]),
+                "-c:v", "libx264", "-c:a", "aac", str(cut),
+            ]
+        )
+        master = asset_record.register_derived(
+            cut, parents=[str(source["asset_id"])], role="MASTER", tool="ffmpeg", operation="trim"
+        )
+
+        verdict = qc_pipeline.run_qc("acceptance-qc", str(master["asset_id"]), retry_limit=1)
+        if verdict["overall"] not in ("needs_human", "reject"):
+            raise RuntimeError("Automatischer Lauf lieferte 'accept' ohne Review.")
+
+        delivery_output = work / "f17-delivery.mp4"
+        _run(
+            [
+                "ffmpeg", "-y", "-ss", "0", "-t", "0.9", "-i", str(material["video"]),
+                "-c:v", "libx264", "-c:a", "aac", str(delivery_output),
+            ]
+        )
+        try:
+            asset_record.register_derived(
+                delivery_output, parents=[str(master["asset_id"])], role="DELIVERY",
+                tool="ffmpeg", operation="export",
+            )
+            raise RuntimeError("DELIVERY wurde ohne akzeptiertes QC-Verdikt zugelassen.")
+        except asset_record.AssetRecordError as error:
+            if "QC-Verdikt" not in str(error):
+                raise
+
+        qc_pipeline.apply_review(
+            "acceptance-qc", verdict["verdict_id"], reviewer="acceptance-run", overall="accept"
+        )
+        delivery = asset_record.register_derived(
+            delivery_output, parents=[str(master["asset_id"])], role="DELIVERY",
+            tool="ffmpeg", operation="export",
+        )
+        if delivery["role"] != "DELIVERY":
+            raise RuntimeError("DELIVERY-Registrierung nach Accept fehlgeschlagen.")
+
+        qc_pipeline.retry_qc("acceptance-qc", verdict["verdict_id"])
+        try:
+            qc_pipeline.retry_qc("acceptance-qc", verdict["verdict_id"])
+            raise RuntimeError("Retry-Limit wurde nicht durchgesetzt.")
+        except qc_pipeline.QcPipelineError:
+            pass
+    finally:
+        asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT = previous
+
+    return (
+        "QC-Verdikt geschrieben, DELIVERY ohne Accept abgelehnt und nach Review erlaubt, "
+        "Retry-Limit durchgesetzt.",
+        {"verdict_id": verdict["verdict_id"], "delivery_asset_id": delivery["asset_id"]},
+    )
+
+
+def _f18(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Cost router: cache reuse, and external_specialist/premium blocked without approval."""
+    from tools import asset_record, cost_router, project_init
+    from tools.egress_guard import EgressBlocked
+
+    previous = (asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT)
+    asset_record.ASSET_ROOT = work / "asset-store-f18"
+    project_init.PROJECTS_ROOT = work / "projects-f18"
+    try:
+        project_init.init_project("acceptance-cost")
+        source = asset_record.register_asset(material["image"])
+        derived_path = work / "f18-derived.png"
+        derived_path.write_bytes(material["image"].read_bytes() + b"\x00")
+        params_sha256 = "a" * 64
+        derived = asset_record.register_derived(
+            derived_path, parents=[str(source["asset_id"])], role="MASTER",
+            tool="layout_render", operation="render_png", params_sha256=params_sha256,
+        )
+
+        cached = cost_router.decide(
+            "acceptance-cost", "reuse_render", task_type="layout", tool="layout_render",
+            operation="render_png", params_sha256=params_sha256,
+        )
+        if cached["decision"]["cost_class"] != "cached_asset":
+            raise RuntimeError("Cache-Treffer wurde nicht erkannt.")
+        if cached["cached_asset"]["asset_id"] != derived["asset_id"]:
+            raise RuntimeError("Cache-Treffer verweist auf das falsche Asset.")
+
+        try:
+            cost_router.decide(
+                "acceptance-cost", "premium_step", task_type="layout", tool="external-gen",
+                operation="premium-op", params_sha256="b" * 64,
+                premium=True, fallback_reason="Lokal nicht moeglich",
+            )
+            raise RuntimeError("Premium ohne Freigabe wurde nicht blockiert.")
+        except cost_router.CostRouterError:
+            pass
+
+        cost_router.approve("acceptance-cost", "premium_step", by="acceptance-run")
+        try:
+            cost_router.decide(
+                "acceptance-cost", "premium_step", task_type="layout", tool="external-gen",
+                operation="premium-op", params_sha256="b" * 64,
+                premium=True, fallback_reason="Lokal nicht moeglich",
+            )
+            raise RuntimeError("Egress-Guard blockierte die Freigabe nicht zusaetzlich.")
+        except EgressBlocked:
+            pass
+
+        manifest = project_init.load_project_manifest("acceptance-cost")
+        cost_log = (project_init.PROJECTS_ROOT / "acceptance-cost" / "cost-log.jsonl").read_text(
+            encoding="utf-8"
+        )
+    finally:
+        asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT = previous
+
+    return (
+        "Cache-Treffer wiederverwendet ein bestehendes Asset; premium bleibt ohne "
+        "Freigabedatei blockiert und selbst mit Freigabe zusätzlich durch den "
+        "Egress-Guard blockiert.",
+        {
+            "cost_decisions": len(manifest["cost_decisions"]),
+            "cost_log_lines": len(cost_log.strip().splitlines()),
+        },
+    )
+
+
+def _f19(work: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Project init: a new project's manifest validates against its schema."""
+    from contracts.validate_contracts import validate
+    from tools import project_init
+
+    previous = project_init.PROJECTS_ROOT
+    project_init.PROJECTS_ROOT = work / "projects-f19"
+    try:
+        manifest = project_init.init_project("acceptance-project")
+        errors = validate("project", manifest)
+        if errors:
+            raise RuntimeError(f"Projektmanifest verletzt das Schema: {errors[0]}")
+        for subdir in project_init.PROJECT_SUBDIRS:
+            if not (project_init.PROJECTS_ROOT / "acceptance-project" / subdir).is_dir():
+                raise RuntimeError(f"Projektordner fehlt: {subdir}")
+    finally:
+        project_init.PROJECTS_ROOT = previous
+
+    return (
+        "project_init erzeugt alle Projektordner und ein schema-valides Manifest.",
+        {"project_id": manifest["project_id"]},
+    )
+
+
 def run_baseline() -> list[Result]:
     with tempfile.TemporaryDirectory(prefix="video-toolkit-acceptance-") as temporary:
         work = Path(temporary)
@@ -951,6 +1197,10 @@ def run_baseline() -> list[Result]:
             lambda: _result("F13", lambda: _f13(work, material)),
             lambda: _result("F14", lambda: _f14(work, material)),
             lambda: _result("F15", lambda: _f15(work, material)),
+            lambda: _result("F16", lambda: _f16(work, material)),
+            lambda: _result("F17", lambda: _f17(work, material)),
+            lambda: _result("F18", lambda: _f18(work, material)),
+            lambda: _result("F19", lambda: _f19(work, material)),
         ]
         return [operation() for operation in operations]
 
@@ -983,7 +1233,7 @@ def _write_reports(
     markdown = (
         "# Acceptance Baseline\n\n"
         + _render_table(results)
-        + f"\n\nFERTIG: {'ja' if complete else 'nein'}, PASS {passed} von 15\n"
+        + f"\n\nFERTIG: {'ja' if complete else 'nein'}, PASS {passed} von {len(CAPABILITY_IDS)}\n"
     )
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     markdown_path.write_text(markdown, encoding="utf-8")
@@ -994,7 +1244,7 @@ def main() -> int:
     print(_render_table(results))
     passed = sum(result.status == "PASS" for result in results)
     complete = passed == len(CAPABILITY_IDS)
-    print(f"\nFERTIG: {'ja' if complete else 'nein'}, PASS {passed} von 15")
+    print(f"\nFERTIG: {'ja' if complete else 'nein'}, PASS {passed} von {len(CAPABILITY_IDS)}")
     try:
         _write_reports(results)
     except FileExistsError as error:

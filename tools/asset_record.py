@@ -235,6 +235,9 @@ SOURCE_ROLES = ("SOURCE", "EDITABLE_SOURCE", "REFERENCE")
 REFERENCE_KINDS = ("person", "product", "brand", "style", "scene")
 
 
+AI_GENERATED_VALUES = ("none", "partial", "full", "unknown")
+
+
 def build_asset_record(
     source: Path,
     *,
@@ -248,6 +251,7 @@ def build_asset_record(
     purpose_binding: list[str] | None = None,
     edit_approval: bool | None = None,
     license_ref: str | None = None,
+    ai_generated: str = "unknown",
 ) -> dict[str, object]:
     """Build, but do not persist, one SOURCE/EDITABLE_SOURCE/REFERENCE record."""
     media_type, metadata, technical = _metadata_for_asset(source)
@@ -276,7 +280,7 @@ def build_asset_record(
         "created_at": datetime.now(UTC).isoformat(),
         "lifecycle": "ingested",
         "rights": rights,
-        "ai_involvement": {"ai_generated": "unknown"},
+        "ai_involvement": {"ai_generated": ai_generated},
         "technical": technical,
     }
     if reference_kind:
@@ -295,12 +299,15 @@ def register_asset(
     purpose_binding: list[str] | None = None,
     edit_approval: bool | None = None,
     license_ref: str | None = None,
+    ai_generated: str = "unknown",
 ) -> dict[str, object]:
     """Copy one imported file into immutable SOURCE/EDITABLE_SOURCE/REFERENCE storage."""
     if role not in SOURCE_ROLES:
         raise AssetRecordError(f"--role muss eine von {SOURCE_ROLES} sein.")
     if reference_kind is not None and reference_kind not in REFERENCE_KINDS:
         raise AssetRecordError(f"reference_kind muss eine von {REFERENCE_KINDS} sein.")
+    if ai_generated not in AI_GENERATED_VALUES:
+        raise AssetRecordError(f"ai_generated muss eine von {AI_GENERATED_VALUES} sein.")
     source = Path(source).expanduser().resolve()
     if not source.is_file() or source.stat().st_size <= 0:
         raise AssetRecordError("Zu registrierendes Asset fehlt oder ist leer.")
@@ -327,6 +334,7 @@ def register_asset(
         person_consent=person_consent,
         purpose_binding=purpose_binding,
         edit_approval=edit_approval,
+        ai_generated=ai_generated,
         license_ref=license_ref,
     )
     errors = validate("asset", record)

@@ -183,6 +183,28 @@ def test_register_asset_rejects_unknown_reference_kind(asset_record, tmp_path: P
         asset_record.register_asset(image_path, role="REFERENCE", reference_kind="alien")
 
 
+def test_register_asset_can_declare_a_definite_ai_generated_status(
+    asset_record, tmp_path: Path
+) -> None:
+    from contracts.validate_contracts import validate
+
+    source = tmp_path / "human-made.mp4"
+    source.write_bytes(b"media")
+
+    record = asset_record.register_asset(source, ai_generated="none")
+
+    assert record["ai_involvement"] == {"ai_generated": "none"}
+    assert validate("asset", record) == []
+
+
+def test_register_asset_rejects_unknown_ai_generated_value(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "media.mp4"
+    source.write_bytes(b"media")
+
+    with pytest.raises(asset_record.AssetRecordError, match="ai_generated"):
+        asset_record.register_asset(source, ai_generated="definitely")
+
+
 def test_register_image_reports_dimensions(asset_record, tmp_path: Path) -> None:
     from PIL import Image
 
