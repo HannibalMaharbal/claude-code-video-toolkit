@@ -294,3 +294,85 @@ def test_metadata_json_is_utf8_safe(tmp_path: Path) -> None:
     target = tmp_path / "metadata.json"
     target.write_text(json.dumps({"title": "München 🎬"}, ensure_ascii=False), encoding="utf-8")
     assert json.loads(target.read_text(encoding="utf-8"))["title"] == "München 🎬"
+
+
+def test_successful_ingest_registers_asset_without_changing_analysis_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools import asset_record
+    from tools.video_ingest import create_analysis_package
+
+    media = tmp_path / "media.mp4"
+    media.write_bytes(b"media")
+    registered: list[tuple[Path, dict[str, object]]] = []
+    def fake_ingest(
+        _source: str, output_dir: Path, **_kwargs: object
+    ) -> tuple[SourceType, Path, None]:
+        imported = output_dir / "media" / media.name
+        imported.parent.mkdir(parents=True, exist_ok=True)
+        imported.write_bytes(media.read_bytes())
+        return SourceType.LOCAL_FILE, imported, None
+
+    monkeypatch.setattr("tools.video_ingest.ingest_source", fake_ingest)
+    monkeypatch.setattr("tools.video_ingest.probe_media", lambda _path: {
+        "duration": 1.0, "container": "mp4", "video_codec": "h264", "audio_codec": "aac",
+        "width": 10, "height": 10, "fps": 25.0,
+    })
+    monkeypatch.setattr(
+        asset_record,
+        "register_asset",
+        lambda path, **kwargs: registered.append((path, kwargs)) or {"asset_id": "ast_test"},
+    )
+
+    report = create_analysis_package(
+        str(media), tmp_path / "package", rights_status="LICENSED", commercial_use="allowed",
+        person_consent="not_needed", license_ref="license-1",
+    )
+
+    assert report["artifacts"] == {
+        "metadata": "metadata.json",
+        "media": "media/media.mp4",
+    }
+    assert registered == [(
+        tmp_path / "package" / "media" / "media.mp4",
+        {
+            "rights_status": "LICENSED", "commercial_use": "allowed",
+            "person_consent": "not_needed", "license_ref": "license-1",
+        },
+    )]
+
+
+def test_asset_registration_failure_does_not_fail_existing_ingest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from tools import asset_record
+    from tools.video_ingest import create_analysis_package
+
+    media = tmp_path / "media.mp4"
+    media.write_bytes(b"media")
+
+    def fake_ingest(
+        _source: str, output_dir: Path, **_kwargs: object
+    ) -> tuple[SourceType, Path, None]:
+        imported = output_dir / "media" / media.name
+        imported.parent.mkdir(parents=True, exist_ok=True)
+        imported.write_bytes(media.read_bytes())
+        return SourceType.LOCAL_FILE, imported, None
+
+    monkeypatch.setattr("tools.video_ingest.ingest_source", fake_ingest)
+    monkeypatch.setattr("tools.video_ingest.probe_media", lambda _path: {
+        "duration": 1.0, "container": "mp4", "video_codec": "h264", "audio_codec": "aac",
+        "width": 10, "height": 10, "fps": 25.0,
+    })
+    monkeypatch.setattr(
+        asset_record,
+        "register_asset",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            asset_record.AssetRecordError("registry refused")
+        ),
+    )
+
+    report = create_analysis_package(str(media), tmp_path / "package")
+
+    assert report["artifacts"]["media"] == "media/media.mp4"
+    assert "Asset-Registrierung: WARN — registry refused" in capsys.readouterr().err

@@ -410,6 +410,32 @@ def _cached_whisper_model(model: str) -> bool:
     return (cache / f"models--mlx-community--whisper-{model}-mlx").is_dir()
 
 
+def _register_imported_asset(
+    source: Path,
+    *,
+    rights_status: str,
+    commercial_use: str,
+    person_consent: str,
+    license_ref: str | None,
+) -> None:
+    """Best-effort registry handoff; a registry failure never invalidates ingest."""
+    try:
+        from tools.asset_record import AssetRecordError, register_asset
+    except ImportError as error:
+        print(f"Asset-Registrierung: WARN — Modul nicht verfügbar: {error}", file=sys.stderr)
+        return
+    try:
+        register_asset(
+            source,
+            rights_status=rights_status,
+            commercial_use=commercial_use,
+            person_consent=person_consent,
+            license_ref=license_ref,
+        )
+    except (AssetRecordError, OSError) as error:
+        print(f"Asset-Registrierung: WARN — {error}", file=sys.stderr)
+
+
 def create_analysis_package(
     source: str,
     output_dir: Path,
@@ -425,6 +451,10 @@ def create_analysis_package(
     audio_only: bool = False,
     whisper_model: str = "tiny",
     language: str | None = None,
+    rights_status: str = "UNKNOWN",
+    commercial_use: str = "unknown",
+    person_consent: str = "unknown",
+    license_ref: str | None = None,
 ) -> dict[str, object]:
     """Run the normalized local pipeline and return its deterministic manifest."""
     if (srt or vtt) and not transcribe:
@@ -432,6 +462,13 @@ def create_analysis_package(
     root = output_dir.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     source_type, local_path, source_url = ingest_source(source, root, audio_only=audio_only)
+    _register_imported_asset(
+        local_path,
+        rights_status=rights_status,
+        commercial_use=commercial_use,
+        person_consent=person_consent,
+        license_ref=license_ref,
+    )
     media = probe_media(local_path)
     normalized: dict[str, object] = {
         "source_type": source_type.value,
@@ -539,6 +576,25 @@ def main() -> int:
         choices=["tiny", "base", "small", "medium", "large-v3"],
     )
     parser.add_argument("--language", help="Optional Whisper language code")
+    parser.add_argument(
+        "--rights-status",
+        default="UNKNOWN",
+        choices=["OWNED", "LICENSED", "USER_PROVIDED", "PUBLIC_DOMAIN", "UNKNOWN", "RESTRICTED"],
+        help="Explicit asset rights status; default is fail-closed UNKNOWN",
+    )
+    parser.add_argument(
+        "--commercial-use",
+        default="unknown",
+        choices=["allowed", "restricted", "unknown"],
+        help="Explicit commercial-use status; default is fail-closed unknown",
+    )
+    parser.add_argument(
+        "--person-consent",
+        default="unknown",
+        choices=["not_needed", "documented", "missing", "unknown"],
+        help="Explicit person-consent status; default is fail-closed unknown",
+    )
+    parser.add_argument("--license-ref", help="Optional license reference; no license is inferred")
     args = parser.parse_args()
     try:
         report = create_analysis_package(
@@ -546,6 +602,8 @@ def main() -> int:
             transcribe=args.transcribe, srt=args.srt, vtt=args.vtt, frames=args.frames,
             frame_interval=args.frame_interval, max_frames=args.max_frames,
             audio_only=args.audio_only, whisper_model=args.whisper_model, language=args.language,
+            rights_status=args.rights_status, commercial_use=args.commercial_use,
+            person_consent=args.person_consent, license_ref=args.license_ref,
         )
     except IngestError as error:
         print(f"Video ingest: FAIL — {error}", file=sys.stderr)

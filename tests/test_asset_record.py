@@ -1,0 +1,102 @@
+import json
+import stat
+from pathlib import Path
+
+import pytest
+
+
+def _media_metadata() -> dict[str, object]:
+    return {
+        "duration": 12.5,
+        "width": 1920,
+        "height": 1080,
+        "fps": 25.0,
+        "video_codec": "h264",
+        "audio_codec": "aac",
+        "container": "mov,mp4,m4a,3gp,3g2,mj2",
+    }
+
+
+@pytest.fixture
+def asset_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from tools import asset_record as module
+
+    monkeypatch.setattr(module, "ASSET_ROOT", tmp_path / "assets")
+    monkeypatch.setattr(module, "probe_media", lambda _path: _media_metadata())
+    return module
+
+
+def test_hash_and_asset_id_are_deterministic(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "sample.mp4"
+    source.write_bytes(b"same media bytes")
+
+    digest = asset_record.sha256_file(source)
+
+    assert digest == asset_record.sha256_file(source)
+    assert asset_record.asset_id_for_sha256(digest) == f"ast_{digest[:20]}"
+
+
+def test_register_accepts_a_path_string(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "clip.mp4"
+    source.write_bytes(b"media")
+
+    record = asset_record.register_asset(str(source))
+
+    assert record["asset_id"].startswith("ast_")
+
+
+def test_register_copies_once_and_reuses_duplicate_record(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"same media bytes")
+
+    first = asset_record.register_asset(source)
+    second = asset_record.register_asset(source)
+    records = list((asset_record.ASSET_ROOT / "source").rglob("*.asset.json"))
+
+    assert first == second
+    assert len(records) == 1
+    target = asset_record.ASSET_ROOT / first["path"]
+    assert target.read_bytes() == b"same media bytes"
+    assert not (target.stat().st_mode & stat.S_IWUSR)
+
+
+def test_defaults_are_fail_closed_and_record_validates(asset_record, tmp_path: Path) -> None:
+    from contracts.validate_contracts import validate
+
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"media")
+
+    record = asset_record.register_asset(source)
+
+    assert record["rights"] == {
+        "rights_status": "UNKNOWN",
+        "commercial_use": "unknown",
+        "person_consent": "unknown",
+        "provider_data_scope": "cloud_not_approved",
+    }
+    assert record["ai_involvement"] == {"ai_generated": "unknown"}
+    assert validate("asset", record) == []
+
+
+def test_invalid_rights_write_nothing(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"media")
+
+    with pytest.raises(asset_record.AssetRecordError, match="Schema"):
+        asset_record.register_asset(source, rights_status="friendly")
+
+    assert not list(asset_record.ASSET_ROOT.rglob("*"))
+
+
+def test_original_is_never_changed(asset_record, tmp_path: Path) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"original remains mutable")
+    before_mode = source.stat().st_mode
+
+    record = asset_record.register_asset(source)
+
+    assert source.read_bytes() == b"original remains mutable"
+    assert source.stat().st_mode == before_mode
+    manifest = asset_record.ASSET_ROOT / record["path"]
+    manifest = manifest.with_name(f"{record['asset_id']}.asset.json")
+    assert json.loads(manifest.read_text(encoding="utf-8"))["asset_id"] == record["asset_id"]
