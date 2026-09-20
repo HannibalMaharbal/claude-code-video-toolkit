@@ -45,6 +45,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.asset_record import AssetRecordError, asset_id_for_sha256, register_derived, sha256_file
+
 # ─── Data types ───────────────────────────────────────────────────
 
 
@@ -72,6 +74,22 @@ class CutSegment:
 
     start: float
     end: float
+
+
+def register_cut_output(input_path: str, output_path: str) -> dict[str, object] | None:
+    """Best-effort local MASTER registration without changing cut success semantics."""
+    try:
+        parent_id = asset_id_for_sha256(sha256_file(Path(input_path)))
+        return register_derived(
+            output_path,
+            parents=[parent_id],
+            role="MASTER",
+            tool="silence_cutter",
+            operation="remove_silence",
+        )
+    except (AssetRecordError, OSError) as error:
+        print(f"Asset-Registrierung: WARN — {error}", file=sys.stderr)
+        return None
 
 
 # ─── Silence detection ────────────────────────────────────────────
@@ -780,7 +798,9 @@ def main() -> int:
     )
     ap.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     ap.add_argument("--json", action="store_true", help="Output segments and verification as JSON")
-    ap.add_argument("--plan-only", action="store_true", help="Only analyze cuts; do not create an output file")
+    ap.add_argument(
+        "--plan-only", action="store_true", help="Only analyze cuts; do not create an output file"
+    )
     ap.add_argument(
         "--remove-silence-index",
         action="append",
@@ -823,7 +843,9 @@ def main() -> int:
     selected_indices = list(range(len(silences)))
     if args.remove_silence_index is not None:
         selected_indices = sorted(set(args.remove_silence_index))
-        if not selected_indices or any(index < 0 or index >= len(silences) for index in selected_indices):
+        if not selected_indices or any(
+            index < 0 or index >= len(silences) for index in selected_indices
+        ):
             print("Error: invalid silence index selection", file=sys.stderr)
             return 1
     selected_silences = [silences[index] for index in selected_indices]
@@ -906,6 +928,7 @@ def main() -> int:
         print(f"Verification FAILED: {verification.get('issues', [])}", file=sys.stderr)
         return 1
 
+    register_cut_output(input_path, output_path)
     print(f"Done. Output: {output_path} ({verification['duration']:.2f}s)", file=sys.stderr)
     if args.verbose:
         print(
