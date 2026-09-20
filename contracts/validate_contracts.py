@@ -5,7 +5,8 @@ Nutzung:
   python validate_contracts.py asset    <datei.json>
   python validate_contracts.py refset   <datei.json>
   python validate_contracts.py project  <datei.json>
-  python validate_contracts.py selftest            # prueft examples/ (valid_* muessen passen, invalid_* muessen scheitern)
+  python validate_contracts.py selftest
+      # prueft examples/ (valid_* muessen passen, invalid_* muessen scheitern)
 
 Exit 0 = ok, 1 = Verstoss.
 """
@@ -21,6 +22,7 @@ SCHEMAS = {
     "asset": "asset-manifest.schema.json",
     "refset": "reference-set.schema.json",
     "project": "project-manifest.schema.json",
+    "layout": "layout-spec.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 
@@ -57,7 +59,8 @@ def selftest():
         errs = validate(kind, load(f))
         good = (not errs) == expect_valid
         ok &= good
-        print(f"{'PASS' if good else 'FAIL'}  {f.name}" + ("" if good or not errs else f"  -> {errs[0]}"))
+        suffix = "" if good or not errs else f"  -> {errs[0]}"
+        print(f"{'PASS' if good else 'FAIL'}  {f.name}" + suffix)
     return ok
 
 

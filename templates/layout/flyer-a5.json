@@ -1,0 +1,54 @@
+{
+  "canvas": { "preset": "A5", "dpi": 96 },
+  "layers": [
+    {
+      "id": "background",
+      "type": "shape",
+      "x": 0,
+      "y": 0,
+      "width": 559,
+      "height": 794,
+      "color": "#f4f1ea"
+    },
+    {
+      "id": "image",
+      "type": "image",
+      "path": "assets/placeholder.png",
+      "fit": "cover",
+      "x": 0,
+      "y": 0,
+      "width": 559,
+      "height": 320
+    },
+    {
+      "id": "headline",
+      "type": "text",
+      "content": "Flyer Headline",
+      "font_family": "Arial",
+      "size_pt": 32,
+      "weight": "bold",
+      "color": "#1a1a1a",
+      "align": "left",
+      "line_height": 1.1,
+      "x": 32,
+      "y": 344,
+      "width": 495,
+      "height": 60
+    },
+    {
+      "id": "body",
+      "type": "text",
+      "content": "Fließtext für den Flyer. Kurzer Absatz mit den wichtigsten Informationen zur Veranstaltung oder zum Angebot.",
+      "font_family": "Arial",
+      "size_pt": 14,
+      "weight": "normal",
+      "color": "#333333",
+      "align": "left",
+      "line_height": 1.4,
+      "x": 32,
+      "y": 420,
+      "width": 495,
+      "height": 300
+    }
+  ]
+}

@@ -1,1 +1,73 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["canvas","layers"],"properties":{"canvas":{"type":"object","required":["preset"],"properties":{"preset":{"enum":["A4","A5","custom"]},"width":{"type":"integer","minimum":1},"height":{"type":"integer","minimum":1},"dpi":{"type":"integer","minimum":72}}},"layers":{"type":"array","items":{"type":"object","required":["id","type"],"properties":{"id":{"type":"string","minLength":1},"type":{"enum":["text","image","shape"]},"content":{"type":"string"},"color":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"size_pt":{"type":"number"},"font_family":{"type":"string"},"font_file":{"type":"string"},"align":{"enum":["left","center","right"]},"opacity":{"type":"number","minimum":0,"maximum":1},"rotation":{"type":"number"}}}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/layout-spec.schema.json",
+  "title": "Layout Spec (image/flyer renderer)",
+  "description": "Canvas + layers for the local Playwright/Chromium HTML renderer. Editable source; every render is a new immutable derived asset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["canvas", "layers"],
+  "properties": {
+    "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset"],
+      "properties": {
+        "preset": { "enum": ["A4", "A5", "custom"] },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "dpi": { "type": "integer", "minimum": 72 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "preset": { "const": "custom" } }, "required": ["preset"] },
+          "then": { "required": ["width", "height"] }
+        }
+      ]
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["text", "image", "shape"] },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "width": { "type": "number" },
+          "height": { "type": "number" },
+          "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+          "rotation": { "type": "number" },
+          "content": { "type": "string" },
+          "font_family": { "type": "string" },
+          "font_file": { "type": "string" },
+          "size_pt": { "type": "number", "exclusiveMinimum": 0 },
+          "weight": { "enum": ["normal", "bold", 100, 200, 300, 400, 500, 600, 700, 800, 900] },
+          "color": { "type": "string" },
+          "align": { "enum": ["left", "center", "right"] },
+          "line_height": { "type": "number", "exclusiveMinimum": 0 },
+          "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+          "path": { "type": "string" },
+          "fit": { "enum": ["cover", "contain", "fill", "none"] }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "type": { "const": "text" } }, "required": ["type"] },
+            "then": { "required": ["content"] }
+          },
+          {
+            "if": { "properties": { "type": { "const": "image" } }, "required": ["type"] },
+            "then": {
+              "anyOf": [{ "required": ["asset_id"] }, { "required": ["path"] }]
+            }
+          },
+          {
+            "if": { "properties": { "type": { "const": "shape" } }, "required": ["type"] },
+            "then": { "required": ["color"] }
+          }
+        ]
+      }
+    }
+  }
+}

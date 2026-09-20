@@ -88,6 +88,66 @@ def test_invalid_rights_write_nothing(asset_record, tmp_path: Path) -> None:
     assert not list(asset_record.ASSET_ROOT.rglob("*"))
 
 
+def test_register_subtitle_file_succeeds(asset_record, tmp_path: Path) -> None:
+    from contracts.validate_contracts import validate
+
+    srt = tmp_path / "cues.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+
+    record = asset_record.register_asset(srt)
+
+    assert record["media_type"] == "subtitle"
+    assert record["role"] == "SOURCE"
+    assert record["technical"] == {}
+    assert validate("asset", record) == []
+
+
+def test_register_document_json_succeeds(asset_record, tmp_path: Path) -> None:
+    from contracts.validate_contracts import validate
+
+    spec = tmp_path / "spec.json"
+    spec.write_text('{"canvas": {"preset": "A5"}, "layers": []}', encoding="utf-8")
+
+    record = asset_record.register_asset(spec)
+
+    assert record["media_type"] == "document"
+    assert record["technical"] == {}
+    assert validate("asset", record) == []
+
+
+def test_register_editable_source_role(asset_record, tmp_path: Path) -> None:
+    spec = tmp_path / "spec.json"
+    spec.write_text('{"canvas": {"preset": "A5"}, "layers": []}', encoding="utf-8")
+
+    record = asset_record.register_asset(spec, role="EDITABLE_SOURCE")
+
+    assert record["role"] == "EDITABLE_SOURCE"
+    assert record["path"].startswith("editable_source/")
+
+
+def test_register_asset_rejects_unknown_role(asset_record, tmp_path: Path) -> None:
+    spec = tmp_path / "spec.json"
+    spec.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(asset_record.AssetRecordError, match="role"):
+        asset_record.register_asset(spec, role="MASTER")
+
+
+def test_register_image_reports_dimensions(asset_record, tmp_path: Path) -> None:
+    from PIL import Image
+
+    from contracts.validate_contracts import validate
+
+    image_path = tmp_path / "picture.png"
+    Image.new("RGB", (120, 60), (10, 20, 30)).save(image_path)
+
+    record = asset_record.register_asset(image_path)
+
+    assert record["media_type"] == "image"
+    assert record["technical"] == {"width": 120, "height": 60}
+    assert validate("asset", record) == []
+
+
 def test_original_is_never_changed(asset_record, tmp_path: Path) -> None:
     source = tmp_path / "source.mp4"
     source.write_bytes(b"original remains mutable")

@@ -82,9 +82,17 @@ def _media_type(metadata: dict[str, object]) -> str:
 def _text_asset_type(path: Path) -> str | None:
     if path.suffix.lower() in {".srt", ".vtt"}:
         return "subtitle"
-    if path.suffix.lower() in {".json", ".txt"}:
+    if path.suffix.lower() in {".json", ".txt", ".pdf"}:
         return "document"
     return None
+
+
+def _image_metadata(path: Path) -> dict[str, object]:
+    from PIL import Image
+
+    with Image.open(path) as image:
+        width, height = image.size
+    return {"width": width, "height": height}
 
 
 def _metadata_for_asset(path: Path) -> tuple[str, dict[str, object], dict[str, object]]:
@@ -95,9 +103,11 @@ def _metadata_for_asset(path: Path) -> tuple[str, dict[str, object], dict[str, o
         errors = validate_subtitle_file(path)
         if errors:
             raise AssetRecordError("Subtitle-QC fehlgeschlagen: " + "; ".join(errors))
-        return text_type, {}, {"bytes": path.stat().st_size}
+        return text_type, {}, {}
     if text_type == "document":
-        return text_type, {}, {"bytes": path.stat().st_size}
+        return text_type, {}, {}
+    if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}:
+        return "image", {}, _image_metadata(path)
     metadata = probe_media(path)
     technical: dict[str, object] = {
         "duration_s": metadata["duration"],
@@ -113,7 +123,7 @@ def _metadata_for_asset(path: Path) -> tuple[str, dict[str, object], dict[str, o
 def _existing_record(asset_id: str, digest: str) -> dict[str, object] | None:
     if not ASSET_ROOT.is_dir():
         return None
-    records = list(ASSET_ROOT.glob(f"source/**/{asset_id}.asset.json"))
+    records = list(ASSET_ROOT.rglob(f"{asset_id}.asset.json"))
     if not records:
         return None
     if len(records) != 1:
@@ -221,17 +231,21 @@ def _make_read_only(path: Path) -> None:
     path.chmod(path.stat().st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
+SOURCE_ROLES = ("SOURCE", "EDITABLE_SOURCE")
+
+
 def build_asset_record(
     source: Path,
     *,
     digest: str,
     destination: Path,
+    role: str = "SOURCE",
     rights_status: str = "UNKNOWN",
     commercial_use: str = "unknown",
     person_consent: str = "unknown",
     license_ref: str | None = None,
 ) -> dict[str, object]:
-    """Build, but do not persist, one SOURCE record for a validated media file."""
+    """Build, but do not persist, one SOURCE/EDITABLE_SOURCE record for a validated file."""
     media_type, metadata, technical = _metadata_for_asset(source)
     asset_id = asset_id_for_sha256(digest)
     relative_path = destination.resolve().relative_to(ASSET_ROOT.resolve()).as_posix()
@@ -246,7 +260,7 @@ def build_asset_record(
     return {
         "schema_version": "1.0.0",
         "asset_id": asset_id,
-        "role": "SOURCE",
+        "role": role,
         "media_type": media_type,
         "path": relative_path,
         "sha256": digest,
@@ -262,12 +276,15 @@ def build_asset_record(
 def register_asset(
     source: Path | str,
     *,
+    role: str = "SOURCE",
     rights_status: str = "UNKNOWN",
     commercial_use: str = "unknown",
     person_consent: str = "unknown",
     license_ref: str | None = None,
 ) -> dict[str, object]:
-    """Copy one imported file into immutable SOURCE storage and record it once."""
+    """Copy one imported file into immutable SOURCE/EDITABLE_SOURCE storage and record it once."""
+    if role not in SOURCE_ROLES:
+        raise AssetRecordError(f"--role muss eine von {SOURCE_ROLES} sein.")
     source = Path(source).expanduser().resolve()
     if not source.is_file() or source.stat().st_size <= 0:
         raise AssetRecordError("Zu registrierendes Asset fehlt oder ist leer.")
@@ -278,7 +295,7 @@ def register_asset(
         return existing
 
     month = datetime.now(UTC).strftime("%Y-%m")
-    target = ASSET_ROOT / "source" / month / sanitize_filename(source.name)
+    target = ASSET_ROOT / role.lower() / month / sanitize_filename(source.name)
     if target.exists():
         raise AssetRecordError(
             f"Abweichendes Asset mit gleichem Namen existiert bereits: {target.name}"
@@ -287,6 +304,7 @@ def register_asset(
         source,
         digest=digest,
         destination=target,
+        role=role,
         rights_status=rights_status,
         commercial_use=commercial_use,
         person_consent=person_consent,
