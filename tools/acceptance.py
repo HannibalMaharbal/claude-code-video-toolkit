@@ -210,15 +210,81 @@ def _f01(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
     }
 
 
-def _f02(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
-    raise MissingCapability(
-        "Kein vorhandener, allgemeiner Bild-Text-Renderer mit Spec-JSON-Vertrag gefunden."
-    )
+def _f02(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    from tools.layout_render import render
+
+    spec_path = work / "f02-spec.json"
+    spec = {
+        "canvas": {"preset": "custom", "width": 400, "height": 200},
+        "layers": [
+            {
+                "id": "bg",
+                "type": "shape",
+                "color": "#ffffff",
+                "x": 0,
+                "y": 0,
+                "width": 400,
+                "height": 200,
+            },
+            {
+                "id": "image",
+                "type": "image",
+                "path": str(material["image"]),
+                "fit": "cover",
+                "x": 0,
+                "y": 0,
+                "width": 400,
+                "height": 120,
+            },
+            {
+                "id": "label",
+                "type": "text",
+                "content": "Acceptance F02",
+                "size_pt": 18,
+                "color": "#000000",
+                "x": 10,
+                "y": 130,
+                "width": 380,
+                "height": 50,
+            },
+        ],
+    }
+    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+    png = work / "f02.png"
+    render(spec_path, png)
+    if not png.is_file() or png.stat().st_size == 0:
+        raise RuntimeError("Layout-Renderer erzeugte keine PNG-Datei.")
+    return "Spec-JSON-Vertrag (Form+Bild+Text) via Playwright/Chromium gerendert.", {
+        "png_bytes": png.stat().st_size
+    }
 
 
-def _f03(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
-    raise MissingCapability(
-        "Kein vorhandener Flyer-/Poster-Renderer mit Vorlage, A4/A5-Spec und PDF+PNG-Export gefunden."
+def _f03(work: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    from tools.layout_render import render, set_value
+
+    flyer_dir = work / "flyer"
+    shutil.copytree(ROOT / "templates" / "layout", flyer_dir)
+    spec_path = flyer_dir / "flyer-a5.json"
+
+    png_1, pdf_1 = work / "flyer-1.png", work / "flyer-1.pdf"
+    render(spec_path, png_1, pdf_1)
+    if not png_1.is_file() or not pdf_1.is_file():
+        raise RuntimeError("Flyer-Renderer erzeugte kein PNG/PDF.")
+    first_png = png_1.read_bytes()
+
+    set_value(spec_path, "headline", "content=Geänderte Überschrift für run2")
+    set_value(spec_path, "headline", "height=90")
+    set_value(spec_path, "headline", "font_family=Georgia")
+    png_2 = work / "flyer-2.png"
+    render(spec_path, png_2)
+    second_png = png_2.read_bytes()
+    if first_png == second_png:
+        raise RuntimeError("Geänderter Flyer erzeugte eine identische Ausgabe.")
+
+    return (
+        "A5-Flyer-Vorlage als PNG+PDF gerendert; Text/Höhe/Schrift per `set` geändert und "
+        "neu gerendert unterscheidet sich vom ersten Lauf.",
+        {"png_1_bytes": len(first_png), "png_2_bytes": len(second_png)},
     )
 
 
@@ -443,7 +509,8 @@ def _f09(work: Path, _: dict[str, Path]) -> tuple[str, dict[str, Any]]:
 
 
 def _f10(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
-    from tools.transcribe import burn_in_subtitles, validate_subtitle_file, write_srt, write_vtt
+    from tools.subtitle_burn import SubtitleBurnError, burn_in
+    from tools.transcribe import validate_subtitle_file, write_srt, write_vtt
 
     cues = [
         {"start": 0.0, "end": 1.0, "text": "Lokaler Untertitel"},
@@ -455,17 +522,18 @@ def _f10(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
     errors = validate_subtitle_file(srt) + validate_subtitle_file(vtt)
     if errors:
         raise RuntimeError("; ".join(errors))
+    output = work / "burned.mp4"
     try:
-        burn_in_subtitles(material["video"], srt, work / "burned.mp4")
-    except RuntimeError as error:
-        if "libass" in str(error) or "subtitles" in str(error):
-            raise MissingCapability(
-                f"SRT/VTT validiert, aber Burn-In fehlt: {error} Remotion-Alternative ist nicht als Renderer implementiert."
-            ) from error
-        raise
-    return "SRT/VTT validiert und lokal eingebrannt.", {
+        burn_in(material["video"], srt, output)
+    except SubtitleBurnError as error:
+        raise MissingCapability(f"Remotion-Subtitle-Burn nicht verfügbar: {error}") from error
+    if not output.is_file() or output.stat().st_size == 0:
+        raise RuntimeError("Subtitle-Burn erzeugte keine Ausgabedatei.")
+    _audio_stream(output)
+    return "SRT/VTT validiert und lokal via Remotion eingebrannt.", {
         "cues": len(cues),
-        "style": "FFmpeg subtitles/libass default",
+        "output_bytes": output.stat().st_size,
+        "style": "Remotion SubtitleBurn composition",
     }
 
 
@@ -501,19 +569,45 @@ def _f11(work: Path, _: dict[str, Path]) -> tuple[str, dict[str, Any]]:
     }
 
 
+_TASK_TYPES = {
+    "image_edit",
+    "image_generate",
+    "layout",
+    "video_cut",
+    "audio_process",
+    "tts",
+    "stt",
+    "subtitle",
+    "translate",
+    "qc_visual",
+    "semantic_analysis",
+    "code",
+}
+
+
 def _f12(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
-    routing = ROOT / "docs" / "KI-SYSTEM-ROUTING.md"
-    if not routing.is_file():
-        raise MissingCapability("Routing-Tabelle docs/KI-SYSTEM-ROUTING.md fehlt.")
-    model = _local_ollama_model()
-    text = routing.read_text(encoding="utf-8")
-    if "Ollama" not in text or "Codex" not in text:
-        raise RuntimeError("Routing-Dokument nennt nicht beide lokalen/agentischen Routen.")
+    from tools.ai_router_check import check
+
+    routing_path = ROOT / "contracts" / "task-routing.json"
+    if not routing_path.is_file():
+        raise MissingCapability("Routing-Tabelle contracts/task-routing.json fehlt.")
+    routing = json.loads(routing_path.read_text(encoding="utf-8"))
+    task_types = set(routing.get("routes", {}))
+    missing_types = sorted(_TASK_TYPES - task_types)
+    if missing_types:
+        raise RuntimeError(f"Routing-Tabelle deckt nicht alle Aufgabentypen ab: {missing_types}")
+
+    backends = check()
+    if not backends["cloud_blocked"]:
+        raise RuntimeError("Cloud-Backends sind nicht als blockiert bestätigt (internal_only).")
+    missing_local = sorted(name for name, ok in backends.items() if name != "cloud_blocked" and not ok)
     return (
-        "Routing-Dokument vorhanden; lokales Ollama per `ollama list` erreichbar. Cloud-Routen nur dokumentarischer Trockenlauf.",
+        "Routing-Tabelle deckt alle 12 Aufgabentypen ab; lokale Backends live geprüft "
+        "(ai_router_check); Cloud-Backends bestätigt blockiert (internal_only).",
         {
-            "routing": str(routing.relative_to(ROOT)),
-            "local_ollama_model": model,
+            "routing": str(routing_path.relative_to(ROOT)),
+            "backends": backends,
+            "missing_local_backends": missing_local,
             "cloud_network_calls": 0,
         },
     )
@@ -651,6 +745,28 @@ def _f14(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
         translate_subtitle_file(
             srt, translated, target_language="English", model=_local_ollama_model()
         )
+        transcript_path = work / "pipeline-transcript.json"
+        transcript_path.write_text(json.dumps(transcript, ensure_ascii=False), encoding="utf-8")
+        srt_record = asset_record.register_derived(
+            srt, parents=[parent], role="VARIANT", tool="mlx-whisper", operation="subtitle_srt"
+        )
+        asset_record.register_derived(
+            vtt, parents=[parent], role="VARIANT", tool="mlx-whisper", operation="subtitle_vtt"
+        )
+        asset_record.register_derived(
+            translated,
+            parents=[str(srt_record["asset_id"])],
+            role="VARIANT",
+            tool="ollama",
+            operation="subtitle_translate",
+        )
+        asset_record.register_derived(
+            transcript_path,
+            parents=[parent],
+            role="VARIANT",
+            tool="mlx-whisper",
+            operation="transcript_json",
+        )
         cut = work / "pipeline-cut.mp4"
         _run(
             [
@@ -697,10 +813,15 @@ def _f14(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
         )
         gate = delivery_gate.check(str(normalized_record["asset_id"]))
         records = list(asset_root.rglob("*.asset.json"))
-        if len(records) != 3:
-            raise RuntimeError(f"Erwartete 3 Asset-Records, gefunden: {len(records)}.")
-        raise MissingCapability(
-            "Pipeline ausgeführt, aber Asset-Registry klassifiziert/registriert SRT/VTT und Transcript nicht als abgeleitete Text-Assets; daher nicht alle Ergebnisse mit parent_ids registrierbar.",
+        expected_records = 7  # source, srt, vtt, translated srt, transcript, cut, normalized
+        if len(records) != expected_records:
+            raise RuntimeError(
+                f"Erwartete {expected_records} Asset-Records, gefunden: {len(records)}."
+            )
+        return (
+            "Pipeline vollständig registriert: Video, SRT/VTT/Übersetzung/Transcript als "
+            "abgeleitete Text-Assets sowie Schnitt (MASTER) und Normalisierung (VARIANT) mit "
+            "vererbten Rechten.",
             {
                 "media_records": len(records),
                 "subtitle_cues": len(cues),

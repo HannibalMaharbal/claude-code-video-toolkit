@@ -1,0 +1,216 @@
+{
+  "generated_at": "2026-09-20T19:42:15.045622+00:00",
+  "results": [
+    {
+      "capability": "F01",
+      "status": "PASS",
+      "reason": "Pillow-Transformationen und drei Formate gerendert.",
+      "measurements": {
+        "size": [
+          300,
+          200
+        ],
+        "alpha_range": [
+          180,
+          180
+        ],
+        "formats": [
+          "png",
+          "jpg",
+          "webp"
+        ]
+      },
+      "duration_s": 0.024
+    },
+    {
+      "capability": "F02",
+      "status": "PASS",
+      "reason": "Spec-JSON-Vertrag (Form+Bild+Text) via Playwright/Chromium gerendert.",
+      "measurements": {
+        "png_bytes": 4273
+      },
+      "duration_s": 0.503
+    },
+    {
+      "capability": "F03",
+      "status": "PASS",
+      "reason": "A5-Flyer-Vorlage als PNG+PDF gerendert; Text/Höhe/Schrift per `set` geändert und neu gerendert unterscheidet sich vom ersten Lauf.",
+      "measurements": {
+        "png_1_bytes": 21957,
+        "png_2_bytes": 29368
+      },
+      "duration_s": 0.575
+    },
+    {
+      "capability": "F04",
+      "status": "PASS",
+      "reason": "Trim/Concat mit Audio gerendert.",
+      "measurements": {
+        "duration_s": 1.833333,
+        "expected_s": 1.8,
+        "fps": 30.0
+      },
+      "duration_s": 0.206
+    },
+    {
+      "capability": "F05",
+      "status": "PASS",
+      "reason": "Reframe, Tempo, XFade-Blende und Overlay gerendert.",
+      "measurements": {
+        "width": 1080,
+        "height": 1920,
+        "duration_s": 2.702521
+      },
+      "duration_s": 0.288
+    },
+    {
+      "capability": "F06",
+      "status": "PASS",
+      "reason": "Silence-Cutter auf lokales Pausenmaterial angewendet.",
+      "measurements": {
+        "silences": 1,
+        "segments": 2,
+        "duration_s": 1.433333
+      },
+      "duration_s": 0.261
+    },
+    {
+      "capability": "F07",
+      "status": "PASS",
+      "reason": "Sprache/Musik, Fades, Normalisierung und M4A-Konvertierung geprüft.",
+      "measurements": {
+        "loudness_lufs": -15.7,
+        "codec": "aac",
+        "duration_s": 3.0
+      },
+      "duration_s": 0.178
+    },
+    {
+      "capability": "F08",
+      "status": "PASS",
+      "reason": "Lokale Kokoro-Ausgabe für Deutsch und Englisch erzeugt.",
+      "measurements": {
+        "de_duration_s": 3.63,
+        "en_duration_s": 2.22
+      },
+      "duration_s": 2.714
+    },
+    {
+      "capability": "F09",
+      "status": "PASS",
+      "reason": "Deutsch und Englisch lokal mit zeitgestempelten Segmenten transkribiert.",
+      "measurements": {
+        "segments": {
+          "de": 1,
+          "en": 1
+        }
+      },
+      "duration_s": 3.006
+    },
+    {
+      "capability": "F10",
+      "status": "PASS",
+      "reason": "SRT/VTT validiert und lokal via Remotion eingebrannt.",
+      "measurements": {
+        "cues": 2,
+        "output_bytes": 198963,
+        "style": "Remotion SubtitleBurn composition"
+      },
+      "duration_s": 2.104
+    },
+    {
+      "capability": "F11",
+      "status": "PASS",
+      "reason": "Lokale Ollama-Übersetzung Deutsch→Englisch→Deutsch mit stabilen Zeitcodes.",
+      "measurements": {
+        "model": "gemma-code:latest",
+        "cues": 1
+      },
+      "duration_s": 2.074
+    },
+    {
+      "capability": "F12",
+      "status": "PASS",
+      "reason": "Routing-Tabelle deckt alle 12 Aufgabentypen ab; lokale Backends live geprüft (ai_router_check); Cloud-Backends bestätigt blockiert (internal_only).",
+      "measurements": {
+        "routing": "contracts/task-routing.json",
+        "backends": {
+          "ollama": true,
+          "whisper": true,
+          "kokoro": true,
+          "ffmpeg": true,
+          "playwright": true,
+          "remotion": true,
+          "cloud_blocked": true
+        },
+        "missing_local_backends": [],
+        "cloud_network_calls": 0
+      },
+      "duration_s": 0.472
+    },
+    {
+      "capability": "F13",
+      "status": "PASS",
+      "reason": "Versionen erfasst und mit vorhandenem Startwert verglichen.",
+      "measurements": {
+        "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers",
+        "yt_dlp": "2026.08.19",
+        "node": "v22.22.2",
+        "python": "Python 3.12.14",
+        "remotion": null,
+        "ollama": "ollama version is 0.34.2",
+        "whisper": "0.4.3",
+        "ollama_models": [
+          "localhost/gemma-code:latest    db574abcd08b    9.6 GB    31 hours ago    ",
+          "devstral-small-2:latest        24277f07f62d    15 GB     2 days ago      ",
+          "gpt-oss:20b-cloud              9a01793d9ef8    -         7 days ago      ",
+          "gpt-oss:120b-cloud             ac7f7a1e7785    -         7 days ago      ",
+          "gemma4:31b-cloud               ef09f235533c    -         9 days ago      ",
+          "gemma4:26b-a4b-it-qat          2dd70431afed    15 GB     13 days ago     ",
+          "gemma-code:latest              db574abcd08b    9.6 GB    13 days ago     "
+        ]
+      },
+      "duration_s": 0.613
+    },
+    {
+      "capability": "F14",
+      "status": "PASS",
+      "reason": "Pipeline vollständig registriert: Video, SRT/VTT/Übersetzung/Transcript als abgeleitete Text-Assets sowie Schnitt (MASTER) und Normalisierung (VARIANT) mit vererbten Rechten.",
+      "measurements": {
+        "media_records": 7,
+        "subtitle_cues": 2,
+        "parent_ids": [
+          "ast_f69f11b3785b93767fe2"
+        ],
+        "release_dry_run_allowed": false,
+        "release_dry_run_reasons": [
+          "ast_ec5de340ad18bd662f52: rights_status ist nicht für Delivery freigegeben.",
+          "ast_ec5de340ad18bd662f52: commercial_use ist nicht allowed.",
+          "ast_ec5de340ad18bd662f52: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_ec5de340ad18bd662f52: ai_involvement.ai_generated ist unknown oder fehlt.",
+          "ast_f69f11b3785b93767fe2: rights_status ist nicht für Delivery freigegeben.",
+          "ast_f69f11b3785b93767fe2: commercial_use ist nicht allowed.",
+          "ast_f69f11b3785b93767fe2: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_f69f11b3785b93767fe2: ai_involvement.ai_generated ist unknown oder fehlt.",
+          "ast_91f5cfdf9031742cefd9: rights_status ist nicht für Delivery freigegeben.",
+          "ast_91f5cfdf9031742cefd9: commercial_use ist nicht allowed.",
+          "ast_91f5cfdf9031742cefd9: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_91f5cfdf9031742cefd9: ai_involvement.ai_generated ist unknown oder fehlt."
+        ]
+      },
+      "duration_s": 3.912
+    },
+    {
+      "capability": "F15",
+      "status": "PASS",
+      "reason": "Bestehende Egress- und Delivery-Gate-Tests bestanden.",
+      "measurements": {
+        "pytest": "..............                                                           [100%]\n14 passed in 0.17s"
+      },
+      "duration_s": 0.34
+    }
+  ],
+  "pass_count": 15,
+  "total": 15,
+  "complete": true
+}
