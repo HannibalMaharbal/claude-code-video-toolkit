@@ -23,6 +23,7 @@ SCHEMAS = {
     "refset": "reference-set.schema.json",
     "project": "project-manifest.schema.json",
     "layout": "layout-spec.schema.json",
+    "routing": "task-routing.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 

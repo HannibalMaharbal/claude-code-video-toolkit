@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/task-routing.schema.json",
+  "title": "Task Routing Table",
+  "description": "Aufgabentyp -> primary/secondary/fallback Werkzeug, Lokalitaet, Kostenklasse, Freigabepflicht.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "routes"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image_edit",
+        "image_generate",
+        "layout",
+        "video_cut",
+        "audio_process",
+        "tts",
+        "stt",
+        "subtitle",
+        "translate",
+        "qc_visual",
+        "semantic_analysis",
+        "code"
+      ],
+      "properties": {
+        "image_edit": { "$ref": "#/$defs/route" },
+        "image_generate": { "$ref": "#/$defs/route" },
+        "layout": { "$ref": "#/$defs/route" },
+        "video_cut": { "$ref": "#/$defs/route" },
+        "audio_process": { "$ref": "#/$defs/route" },
+        "tts": { "$ref": "#/$defs/route" },
+        "stt": { "$ref": "#/$defs/route" },
+        "subtitle": { "$ref": "#/$defs/route" },
+        "translate": { "$ref": "#/$defs/route" },
+        "qc_visual": { "$ref": "#/$defs/route" },
+        "semantic_analysis": { "$ref": "#/$defs/route" },
+        "code": { "$ref": "#/$defs/route" }
+      }
+    }
+  },
+  "$defs": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "secondary", "fallback", "locality", "cost_class", "requires_approval"],
+      "properties": {
+        "primary": { "type": "string", "minLength": 1 },
+        "secondary": { "type": "string", "minLength": 1 },
+        "fallback": { "type": "string", "minLength": 1 },
+        "locality": { "enum": ["local", "cloud", "mixed"] },
+        "cost_class": { "enum": ["FREE", "PAID", "LIMITED"] },
+        "requires_approval": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "description": "Cloud-Routen brauchen immer eine Freigabe.",
+          "if": { "properties": { "locality": { "const": "cloud" } }, "required": ["locality"] },
+          "then": { "properties": { "requires_approval": { "const": true } } }
+        },
+        {
+          "description": "Lokale, kostenlose Routen brauchen keine Freigabe.",
+          "if": {
+            "properties": { "locality": { "const": "local" }, "cost_class": { "const": "FREE" } },
+            "required": ["locality", "cost_class"]
+          },
+          "then": { "properties": { "requires_approval": { "const": false } } }
+        }
+      ]
+    }
+  }
+}
