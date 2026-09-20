@@ -1,0 +1,74 @@
+{
+  "entries": [
+    {
+      "path": "tools/cloud_gpu.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Cloud-GPU-Client; keine Ausführung im Internal-Only-Modus."
+    },
+    {
+      "path": "tools/dewatermark.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender externer De-Watermark-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/dewatermark.py",
+      "pattern": "social_api",
+      "reason": "TikTok-Layoutbezeichnung, keine Plattform-API-Ausführung."
+    },
+    {
+      "path": "tools/flux2.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Bildmodell-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/ideogram4.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Bildmodell-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/kokoro_tts.py",
+      "pattern": "urllib_send",
+      "reason": "Historischer Erststart-Downloader; Live-Check nutzt ausschließlich Cache."
+    },
+    {
+      "path": "tools/locate_watermark.py",
+      "pattern": "social_api",
+      "reason": "TikTok-Layoutbezeichnung, keine Plattform-API-Ausführung."
+    },
+    {
+      "path": "tools/music_gen.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Musikgenerator-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/qwen3_tts.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender TTS-Provider-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/sadtalker.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Video-Provider-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/sixtydb_tts.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender TTS-Provider-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/upscale.py",
+      "pattern": "requests_send",
+      "reason": "Bestehender Upscale-Provider-Client; nur statisch erfasst."
+    },
+    {
+      "path": "tools/video_ingest.py",
+      "pattern": "social_api",
+      "reason": "Instagram-Erkennung und Fehlermeldungen; kein Posting-Pfad."
+    },
+    {
+      "path": "tools/youtube_upload.py",
+      "pattern": "googleapiclient",
+      "reason": "YouTube-API-Client; alle Auth-/API-/Upload-Einstiege erhalten den Egress-Guard."
+    }
+  ]
+}

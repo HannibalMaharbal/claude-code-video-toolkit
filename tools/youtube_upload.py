@@ -149,6 +149,13 @@ def log(msg: str, level: str = "info"):
     print(f"{color}{prefix.get(level, '->')} {msg}{reset}", file=sys.stderr)
 
 
+def require_youtube_egress(target: str) -> None:
+    """Keep every YouTube network path behind the committed egress policy."""
+    from tools.egress_guard import require_egress
+
+    require_egress("youtube_api", target)
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -180,6 +187,7 @@ def get_credentials(
 
     Raises AuthError with an actionable message on any failure.
     """
+    require_youtube_egress("oauth_credentials")
     from config import get_youtube_client_secrets_file
 
     token_file = token_path_for(account)
@@ -245,6 +253,7 @@ def get_credentials(
 
 def build_service(creds: "Credentials"):
     # cache_discovery=False silences the oauth2client cache warning and avoids disk writes.
+    require_youtube_egress("youtube_api_service")
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
@@ -363,6 +372,7 @@ def resumable_upload(request) -> dict:
     Returns the inserted video resource dict. Raises UploadError on permanent failure
     and re-raises non-retriable HttpError (4xx) immediately.
     """
+    require_youtube_egress("video_upload")
     response = None
     error: Optional[str] = None
     retry = 0
@@ -402,6 +412,7 @@ def resumable_upload(request) -> dict:
 
 def set_thumbnail(youtube, video_id: str, thumb_path: str) -> bool:
     """Attach a custom thumbnail. Non-fatal: returns True/False, never raises out."""
+    require_youtube_egress("thumbnail_upload")
     try:
         mime = mimetypes.guess_type(thumb_path)[0] or "image/png"
         media = MediaFileUpload(thumb_path, mimetype=mime, resumable=False)
@@ -419,6 +430,7 @@ def set_thumbnail(youtube, video_id: str, thumb_path: str) -> bool:
 
 def add_caption(youtube, video_id: str, caption_path: str, language: str) -> bool:
     """Insert a caption track from an .srt/.vtt file. Non-fatal."""
+    require_youtube_egress("caption_upload")
     try:
         media = MediaFileUpload(caption_path, mimetype="application/octet-stream", resumable=False)
         body = {
@@ -439,6 +451,7 @@ def add_caption(youtube, video_id: str, caption_path: str, language: str) -> boo
 
 def add_to_playlist(youtube, video_id: str, playlist_id: str) -> bool:
     """Add the uploaded video to a playlist. Non-fatal."""
+    require_youtube_egress("playlist_mutation")
     try:
         youtube.playlistItems().insert(
             part="snippet",

@@ -1,3 +1,5 @@
+## Betriebsmodus: INTERN-ONLY. Kein Upload/Publish/Posting, fail-closed (unknown/UNKNOWN), additiv, Assets unveränderlich, keine Cloud/Kosten ohne Freigabe, Personenreferenzen nie an Anbieter ohne Consent, ein Schritt = ein Branch/Commit, kein Push. Einzige spätere Öffnung: release-ready/ nach manueller Freigabe. Stand: Phase 1 abgeschlossen (integration/internal-v1), Phase 2 Egress-Guard.
+
 # AI Handoff
 
 - Datum: 2026-09-05
