@@ -85,12 +85,14 @@ def test_installed_remotion_matches_pinned_minimum() -> None:
 
 
 @pytest.mark.integration
-def test_f13_fails_only_on_the_deliberately_pinned_python_minimum() -> None:
-    """The project venv is deliberately pinned to <3.13 (mlx-whisper on Apple Silicon);
-    contracts/stack-manifest.json requires python>=3.14.7. This is a known, accepted
-    mismatch (see AI_HANDOFF.md), not a bug — F13 must keep failing on it, not silently
-    pass, until either the pin or the minimum is deliberately revisited."""
+def test_f13_passes_with_the_venv_python_minimum() -> None:
+    """contracts/stack-manifest.json's python minimum must track pyproject.toml's
+    requires-python lower bound (currently >=3.12), not some unrelated target
+    version - the project venv is deliberately pinned to <3.13 (mlx-whisper on
+    Apple Silicon, see AI_HANDOFF.md) and F13 checks that exact interpreter."""
     from tools.acceptance import _f13
 
-    with pytest.raises(RuntimeError, match=r"python: Ist .* erfüllt nicht >=3\.14\.7"):
-        _f13(Path("."), {})
+    reason, measurements = _f13(Path("."), {})
+    assert "alle Mindestversionen erfüllt" in reason
+    assert measurements["minimum_versions"]["python"] == ">=3.12"
+    assert measurements["python"].startswith("Python 3.12")
