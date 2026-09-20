@@ -5,6 +5,8 @@
     "yt_dlp": "2026.08.19",
     "node": "v22.22.2",
     "python": "Python 3.12.14",
+    "playwright": "1.63.0",
+    "playwright_chromium": "153.0.8010.12 (v1243)",
     "remotion": null,
     "ollama": "ollama version is 0.34.2",
     "whisper": "0.4.3",
