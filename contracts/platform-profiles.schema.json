@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/platform-profiles.schema.json",
+  "title": "Platform Delivery Profiles",
+  "description": "Technical delivery constraints per platform surface. Every profile starts UNVERIFIED with conservative (restrictive) placeholder values; a release package may never use a profile that is not VERIFIED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "profiles"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "youtube_long",
+        "youtube_short",
+        "instagram_reel",
+        "instagram_feed",
+        "facebook_video",
+        "tiktok",
+        "x_video",
+        "website_hero",
+        "ecommerce_video",
+        "ecommerce_image",
+        "ad_16x9",
+        "ad_1x1",
+        "ad_9x16"
+      ],
+      "properties": {
+        "youtube_long": { "$ref": "#/$defs/profile" },
+        "youtube_short": { "$ref": "#/$defs/profile" },
+        "instagram_reel": { "$ref": "#/$defs/profile" },
+        "instagram_feed": { "$ref": "#/$defs/profile" },
+        "facebook_video": { "$ref": "#/$defs/profile" },
+        "tiktok": { "$ref": "#/$defs/profile" },
+        "x_video": { "$ref": "#/$defs/profile" },
+        "website_hero": { "$ref": "#/$defs/profile" },
+        "ecommerce_video": { "$ref": "#/$defs/profile" },
+        "ecommerce_image": { "$ref": "#/$defs/profile" },
+        "ad_16x9": { "$ref": "#/$defs/profile" },
+        "ad_1x1": { "$ref": "#/$defs/profile" },
+        "ad_9x16": { "$ref": "#/$defs/profile" }
+      }
+    }
+  },
+  "$defs": {
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "safe_zone": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["width", "height", "x", "y"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "subtitle_requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "burned_in"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "burned_in": { "type": "boolean" },
+        "format": { "enum": ["srt", "vtt", null] }
+      }
+    },
+    "thumbnail_requirements": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "resolution": {
+          "oneOf": [{ "$ref": "#/$defs/resolution" }, { "type": "null" }]
+        },
+        "aspect_ratio": { "type": ["string", "null"], "pattern": "^\\d+:\\d+$" },
+        "max_file_size_bytes": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "media_type",
+        "aspect_ratio",
+        "resolution",
+        "max_duration_s",
+        "max_file_size_bytes",
+        "fps",
+        "codec",
+        "container",
+        "loudness_target_lufs",
+        "safe_zone",
+        "subtitle_requirements",
+        "thumbnail_requirements",
+        "status",
+        "verified_at",
+        "source_url"
+      ],
+      "properties": {
+        "media_type": { "enum": ["video", "image"] },
+        "aspect_ratio": { "type": "string", "pattern": "^\\d+:\\d+$" },
+        "resolution": { "$ref": "#/$defs/resolution" },
+        "max_duration_s": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "max_file_size_bytes": { "type": "integer", "minimum": 1 },
+        "fps": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "codec": { "type": ["string", "null"] },
+        "container": { "type": ["string", "null"] },
+        "loudness_target_lufs": { "type": ["number", "null"] },
+        "safe_zone": { "$ref": "#/$defs/safe_zone" },
+        "subtitle_requirements": { "$ref": "#/$defs/subtitle_requirements" },
+        "thumbnail_requirements": { "$ref": "#/$defs/thumbnail_requirements" },
+        "status": { "enum": ["UNVERIFIED", "VERIFIED"] },
+        "verified_at": { "type": ["string", "null"], "format": "date-time" },
+        "source_url": { "type": ["string", "null"] }
+      },
+      "allOf": [
+        {
+          "description": "Video profiles need duration/fps/codec/container/loudness.",
+          "if": { "properties": { "media_type": { "const": "video" } }, "required": ["media_type"] },
+          "then": {
+            "properties": {
+              "max_duration_s": { "type": "number" },
+              "fps": { "type": "number" },
+              "codec": { "type": "string" },
+              "container": { "type": "string" },
+              "loudness_target_lufs": { "type": "number" }
+            }
+          }
+        },
+        {
+          "description": "Image profiles have no duration/fps/loudness.",
+          "if": { "properties": { "media_type": { "const": "image" } }, "required": ["media_type"] },
+          "then": {
+            "properties": {
+              "max_duration_s": { "const": null },
+              "fps": { "const": null },
+              "loudness_target_lufs": { "const": null }
+            }
+          }
+        },
+        {
+          "description": "VERIFIED profiles must carry proof of when/where they were confirmed.",
+          "if": { "properties": { "status": { "const": "VERIFIED" } }, "required": ["status"] },
+          "then": {
+            "properties": {
+              "verified_at": { "type": "string" },
+              "source_url": { "type": "string" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

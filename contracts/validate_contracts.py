@@ -25,6 +25,7 @@ SCHEMAS = {
     "layout": "layout-spec.schema.json",
     "routing": "task-routing.schema.json",
     "qc_verdict": "qc-verdict.schema.json",
+    "platform_profiles": "platform-profiles.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 
