@@ -508,6 +508,24 @@ def validate_args(args) -> Optional[str]:
     return None
 
 
+def delivery_gate_failures(args: argparse.Namespace) -> list[dict[str, object]]:
+    """Gate every uploaded file, including optional thumbnail and captions."""
+    from delivery_gate import check as check_delivery_gate
+
+    failures: list[dict[str, object]] = []
+    for label, value in (
+        ("video", args.video),
+        ("thumbnail", args.thumbnail),
+        ("captions", args.captions),
+    ):
+        if not value:
+            continue
+        decision = check_delivery_gate(value)
+        if not decision["allowed"]:
+            failures.append({"asset": label, "path": value, "reasons": decision["reasons"]})
+    return failures
+
+
 def emit_json(payload: dict):
     print(json.dumps(payload))
 
@@ -605,6 +623,25 @@ def main():
         log(err, "error")
         if args.json_out:
             emit_json({"success": False, "error": err, "errorType": "validation"})
+        sys.exit(1)
+
+    gate_failures = delivery_gate_failures(args)
+    if gate_failures:
+        for failure in gate_failures:
+            failure_reasons = failure["reasons"]
+            reason_text = (
+                "; ".join(failure_reasons)
+                if isinstance(failure_reasons, list)
+                and all(isinstance(reason, str) for reason in failure_reasons)
+                else "Unbekannter Delivery-Gate-Fehler."
+            )
+            log(
+                f"Delivery-Gate verweigert {failure['asset']}: "
+                + reason_text,
+                "error",
+            )
+        if args.json_out:
+            emit_json({"success": False, "errorType": "delivery_gate", "failures": gate_failures})
         sys.exit(1)
 
     description = read_description(args)

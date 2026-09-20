@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import argparse
+import copy
 import hashlib
 import json
 import os
 import shutil
 import stat
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -69,6 +72,22 @@ def _existing_record(asset_id: str, digest: str) -> dict[str, object] | None:
     return record
 
 
+def load_asset_record(asset_id: str) -> tuple[dict[str, object], Path]:
+    """Load exactly one record by ID without modifying it."""
+    records = list(ASSET_ROOT.rglob(f"{asset_id}.asset.json")) if ASSET_ROOT.is_dir() else []
+    if not records:
+        raise AssetRecordError(f"Asset-Record nicht gefunden: {asset_id}")
+    if len(records) != 1:
+        raise AssetRecordError(f"Mehrere Asset-Records für {asset_id} gefunden.")
+    try:
+        record = json.loads(records[0].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise AssetRecordError(f"Asset-Record ist nicht lesbar: {asset_id}") from error
+    if not isinstance(record, dict) or record.get("asset_id") != asset_id:
+        raise AssetRecordError(f"Asset-Record ist ungültig: {asset_id}")
+    return record, records[0]
+
+
 def _record_path(asset_id: str, source_path: Path) -> Path:
     return source_path.with_name(f"{asset_id}.asset.json")
 
@@ -86,6 +105,23 @@ def _write_new_file(path: Path, content: bytes) -> None:
         raise AssetRecordError(f"Zieldatei existiert bereits: {path.name}") from error
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _replace_file(path: Path, content: bytes) -> None:
+    """Atomically replace an existing record only after caller-side validation."""
+    descriptor, temporary_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _append_jsonl(path: Path, entry: dict[str, object]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _copy_new_file(source: Path, target: Path) -> None:
@@ -204,3 +240,101 @@ def register_asset(
         target.unlink(missing_ok=True)
         raise
     return record
+
+
+def set_rights(
+    asset_id: str,
+    *,
+    rights_status: str | None = None,
+    commercial_use: str | None = None,
+    person_consent: str | None = None,
+    provider_data_scope: str | None = None,
+    license_ref: str | None = None,
+    note: str,
+) -> dict[str, object]:
+    """Update only a record's rights block and append an immutable audit entry."""
+    if not note.strip():
+        raise AssetRecordError("--note darf nicht leer sein.")
+    record, record_path = load_asset_record(asset_id)
+    errors = validate("asset", record)
+    if errors:
+        raise AssetRecordError(f"Bestehender Asset-Record verletzt das Schema: {errors[0]}")
+
+    current_rights = record.get("rights")
+    if not isinstance(current_rights, dict):
+        raise AssetRecordError("Bestehender Asset-Record enthält keinen Rechteblock.")
+    old_rights: dict[str, object] = copy.deepcopy(current_rights)
+    new_rights = copy.deepcopy(old_rights)
+    changes = {
+        "rights_status": rights_status,
+        "commercial_use": commercial_use,
+        "person_consent": person_consent,
+        "provider_data_scope": provider_data_scope,
+        "license_ref": license_ref,
+    }
+    supplied = {key: value for key, value in changes.items() if value is not None}
+    if not supplied:
+        raise AssetRecordError("Mindestens ein Rechtefeld muss gesetzt werden.")
+    new_rights.update(supplied)
+    record["rights"] = new_rights
+    errors = validate("asset", record)
+    if errors:
+        raise AssetRecordError(f"Rechteänderung verletzt das Schema: {errors[0]}")
+
+    content = json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    audit_entry: dict[str, object] = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "asset_id": asset_id,
+        "old": old_rights,
+        "new": new_rights,
+        "note": note,
+    }
+    _replace_file(record_path, content.encode("utf-8"))
+    _append_jsonl(record_path.with_name(f"{asset_id}.rights.log.jsonl"), audit_entry)
+    return record
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Inspect or update immutable asset records.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    set_rights_parser = commands.add_parser("set-rights", help="Set audited rights fields.")
+    set_rights_parser.add_argument("asset_id")
+    set_rights_parser.add_argument(
+        "--rights-status",
+        choices=("OWNED", "LICENSED", "USER_PROVIDED", "PUBLIC_DOMAIN", "UNKNOWN", "RESTRICTED"),
+    )
+    set_rights_parser.add_argument(
+        "--commercial-use", choices=("allowed", "restricted", "unknown")
+    )
+    set_rights_parser.add_argument(
+        "--person-consent", choices=("not_needed", "documented", "missing", "unknown")
+    )
+    set_rights_parser.add_argument(
+        "--provider-data-scope", choices=("local", "cloud_approved", "cloud_not_approved")
+    )
+    set_rights_parser.add_argument("--license-ref")
+    set_rights_parser.add_argument("--note", required=True)
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        record = set_rights(
+            args.asset_id,
+            rights_status=args.rights_status,
+            commercial_use=args.commercial_use,
+            person_consent=args.person_consent,
+            provider_data_scope=args.provider_data_scope,
+            license_ref=args.license_ref,
+            note=args.note,
+        )
+    except AssetRecordError as error:
+        print(f"Asset-Rechte: ERROR — {error}", file=sys.stderr)
+        return 1
+    print(json.dumps(record, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
