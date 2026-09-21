@@ -363,6 +363,7 @@ def set_rights(
     commercial_use: str | None = None,
     person_consent: str | None = None,
     provider_data_scope: str | None = None,
+    approved_providers: list[str] | None = None,
     license_ref: str | None = None,
     note: str,
 ) -> dict[str, object]:
@@ -384,6 +385,7 @@ def set_rights(
         "commercial_use": commercial_use,
         "person_consent": person_consent,
         "provider_data_scope": provider_data_scope,
+        "approved_providers": approved_providers,
         "license_ref": license_ref,
     }
     supplied = {key: value for key, value in changes.items() if value is not None}
@@ -472,12 +474,28 @@ def _inherited_rights(parents: list[dict[str, object]]) -> dict[str, object]:
         if "unknown" in commercial_uses
         else "restricted"
     )
-    return {
+    provider_data_scope = _most_restrictive(provider_scopes, _PROVIDER_SCOPE_RANK)
+    result: dict[str, object] = {
         "rights_status": _most_restrictive(statuses, _RIGHTS_STATUS_RANK),
         "commercial_use": commercial_use,
         "person_consent": _most_restrictive(consents, _CONSENT_RANK),
-        "provider_data_scope": _most_restrictive(provider_scopes, _PROVIDER_SCOPE_RANK),
+        "provider_data_scope": provider_data_scope,
     }
+    if provider_data_scope == "cloud_approved":
+        # provider_data_scope only resolves to cloud_approved when every parent is
+        # cloud_approved (it is the highest-ranked/most-restrictive value otherwise),
+        # so every rights_block here has its own approved_providers to intersect.
+        provider_sets = [
+            set(rights_block.get("approved_providers") or []) for rights_block in rights
+        ]
+        approved_providers = sorted(set.intersection(*provider_sets)) if provider_sets else []
+        if not approved_providers:
+            raise AssetRecordError(
+                "Geerbtes provider_data_scope=cloud_approved hat keine gemeinsame "
+                "approved_providers-Schnittmenge."
+            )
+        result["approved_providers"] = approved_providers
+    return result
 
 
 def _inherited_ai_involvement(parents: list[dict[str, object]], tool: str) -> dict[str, str]:
@@ -513,6 +531,7 @@ def register_derived(
     tool_version: str | None = None,
     job_id: str | None = None,
     params_sha256: str | None = None,
+    ai_generated: str | None = None,
 ) -> dict[str, object]:
     """Register a local, immutable derivative after validating all parent assets."""
     output = Path(output_path).expanduser().resolve()
@@ -526,6 +545,8 @@ def register_derived(
         raise AssetRecordError("Parent-IDs dürfen nicht doppelt vorkommen.")
     if not tool.strip() or not operation.strip():
         raise AssetRecordError("--tool und --operation dürfen nicht leer sein.")
+    if ai_generated is not None and ai_generated not in AI_GENERATED_VALUES:
+        raise AssetRecordError(f"ai_generated muss eine von {AI_GENERATED_VALUES} sein.")
     if role == "DELIVERY":
         from tools.qc_pipeline import find_accepted_verdict
 
@@ -580,7 +601,11 @@ def register_derived(
         "parent_ids": parents,
         "derivation": derivation,
         "rights": _inherited_rights(parent_records),
-        "ai_involvement": _inherited_ai_involvement(parent_records, tool),
+        "ai_involvement": (
+            {"ai_generated": ai_generated}
+            if ai_generated is not None
+            else _inherited_ai_involvement(parent_records, tool)
+        ),
         "technical": technical,
     }
     errors = validate("asset", record)
@@ -622,6 +647,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_rights_parser.add_argument(
         "--provider-data-scope", choices=("local", "cloud_approved", "cloud_not_approved")
     )
+    set_rights_parser.add_argument("--approved-providers", nargs="+")
     set_rights_parser.add_argument("--license-ref")
     set_rights_parser.add_argument("--note", required=True)
     derived_parser = commands.add_parser(
@@ -635,6 +661,7 @@ def build_parser() -> argparse.ArgumentParser:
     derived_parser.add_argument("--tool-version")
     derived_parser.add_argument("--job-id")
     derived_parser.add_argument("--params-sha256")
+    derived_parser.add_argument("--ai-generated", choices=AI_GENERATED_VALUES)
     return parser
 
 
@@ -648,6 +675,7 @@ def main() -> int:
                 commercial_use=args.commercial_use,
                 person_consent=args.person_consent,
                 provider_data_scope=args.provider_data_scope,
+                approved_providers=args.approved_providers,
                 license_ref=args.license_ref,
                 note=args.note,
             )
@@ -661,6 +689,7 @@ def main() -> int:
                 tool_version=args.tool_version,
                 job_id=args.job_id,
                 params_sha256=args.params_sha256,
+                ai_generated=args.ai_generated,
             )
     except AssetRecordError as error:
         print(f"Asset-Rechte: ERROR — {error}", file=sys.stderr)

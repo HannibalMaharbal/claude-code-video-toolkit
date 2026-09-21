@@ -26,6 +26,7 @@ SCHEMAS = {
     "routing": "task-routing.schema.json",
     "qc_verdict": "qc-verdict.schema.json",
     "platform_profiles": "platform-profiles.schema.json",
+    "semantic_analysis": "semantic-analysis.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 
@@ -54,6 +55,10 @@ def validate(kind, doc):
     if kind == "qc_verdict" and not errors:
         if doc["retry_count"] > doc["retry_limit"]:
             errors.append("retry_count ueberschreitet retry_limit")
+    if kind == "semantic_analysis" and not errors:
+        for index, highlight in enumerate(doc["highlights"]):
+            if highlight["end_s"] <= highlight["start_s"]:
+                errors.append(f"highlights/{index}: end_s muss nach start_s liegen")
     return errors
 
 

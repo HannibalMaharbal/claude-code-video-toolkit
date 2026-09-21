@@ -158,6 +158,47 @@ def test_mixed_parents_inherit_the_most_restrictive_values(registry, tmp_path: P
     assert child["ai_involvement"]["ai_generated"] == "full"
 
 
+def test_cloud_approved_parents_inherit_intersected_providers(
+    registry, tmp_path: Path
+) -> None:
+    root, asset_record, _delivery_gate = registry
+    first = _parent(
+        root,
+        asset_record,
+        asset_id="ast_cloudparent1",
+        rights={
+            "rights_status": "OWNED",
+            "commercial_use": "allowed",
+            "person_consent": "not_needed",
+            "provider_data_scope": "cloud_approved",
+            "approved_providers": ["openai", "anthropic"],
+        },
+    )
+    second = _parent(
+        root,
+        asset_record,
+        asset_id="ast_cloudparent2",
+        rights={
+            "rights_status": "OWNED",
+            "commercial_use": "allowed",
+            "person_consent": "not_needed",
+            "provider_data_scope": "cloud_approved",
+            "approved_providers": ["openai"],
+        },
+    )
+
+    child = asset_record.register_derived(
+        _output(tmp_path),
+        parents=[first["asset_id"], second["asset_id"]],
+        role="VARIANT",
+        tool="semantic_analysis",
+        operation="analyze",
+    )
+
+    assert child["rights"]["provider_data_scope"] == "cloud_approved"
+    assert child["rights"]["approved_providers"] == ["openai"]
+
+
 def test_missing_parent_writes_nothing(registry, tmp_path: Path) -> None:
     root, asset_record, _delivery_gate = registry
 
@@ -203,6 +244,43 @@ def test_ai_involvement_is_inherited_or_marked_partial_for_ai_tool(
 
     assert inherited["ai_involvement"]["ai_generated"] == "partial"
     assert generated["ai_involvement"]["ai_generated"] == "partial"
+
+
+def test_register_derived_accepts_an_explicit_ai_generated_override(
+    registry, tmp_path: Path
+) -> None:
+    root, asset_record, _delivery_gate = registry
+    parent = _parent(
+        root, asset_record, asset_id="ast_explicitoverride", rights=_approved_rights()
+    )
+
+    record = asset_record.register_derived(
+        _output(tmp_path, "explicit.mp4"),
+        parents=[parent["asset_id"]],
+        role="VARIANT",
+        tool="semantic_analysis",
+        operation="analyze",
+        ai_generated="partial",
+    )
+
+    assert record["ai_involvement"] == {"ai_generated": "partial"}
+
+
+def test_register_derived_rejects_unknown_ai_generated_override(
+    registry, tmp_path: Path
+) -> None:
+    root, asset_record, _delivery_gate = registry
+    parent = _parent(root, asset_record, asset_id="ast_badoverride", rights=_approved_rights())
+
+    with pytest.raises(asset_record.AssetRecordError, match="ai_generated"):
+        asset_record.register_derived(
+            _output(tmp_path, "bad.mp4"),
+            parents=[parent["asset_id"]],
+            role="VARIANT",
+            tool="ffmpeg",
+            operation="cut",
+            ai_generated="definitely",
+        )
 
 
 def test_master_from_unknown_source_is_allowed_for_internal_work(registry, tmp_path: Path) -> None:

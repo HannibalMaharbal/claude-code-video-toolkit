@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/contracts/semantic-analysis.schema.json",
+  "title": "Semantic Analysis Result",
+  "description": "An agent-produced semantic analysis of one asset: highlights, topics, and per-frame subject boxes, with a declared analyzer and scope proof. Cross-field checks (highlight end>start, cloud scope actually approved) run in the validator, not the schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "asset_id",
+    "analyzer",
+    "created_at",
+    "highlights",
+    "topics",
+    "subject_boxes"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "asset_id": { "type": "string", "pattern": "^ast_[a-z0-9]{12,32}$" },
+    "analyzer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "scope"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string" },
+        "scope": { "enum": ["local", "cloud_approved"] },
+        "provider": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "description": "A cloud_approved scope claim must name the provider used.",
+          "if": { "properties": { "scope": { "const": "cloud_approved" } }, "required": ["scope"] },
+          "then": { "required": ["provider"] }
+        }
+      ]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start_s", "end_s", "reason", "score"],
+        "properties": {
+          "start_s": { "type": "number", "minimum": 0 },
+          "end_s": { "type": "number", "exclusiveMinimum": 0 },
+          "reason": { "type": "string", "minLength": 1 },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "subject_boxes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["frame_ref", "boxes"],
+        "properties": {
+          "frame_ref": { "type": "string", "minLength": 1 },
+          "boxes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["x", "y", "width", "height", "confidence"],
+              "properties": {
+                "x": { "type": "number", "minimum": 0, "maximum": 1 },
+                "y": { "type": "number", "minimum": 0, "maximum": 1 },
+                "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+                "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                "label": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

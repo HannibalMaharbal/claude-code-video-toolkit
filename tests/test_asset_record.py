@@ -133,6 +133,27 @@ def test_register_asset_rejects_unknown_role(asset_record, tmp_path: Path) -> No
         asset_record.register_asset(spec, role="MASTER")
 
 
+def test_set_rights_can_set_provider_data_scope_and_approved_providers(
+    asset_record, tmp_path: Path
+) -> None:
+    from contracts.validate_contracts import validate
+
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"media")
+    record = asset_record.register_asset(source)
+
+    updated = asset_record.set_rights(
+        record["asset_id"],
+        provider_data_scope="cloud_approved",
+        approved_providers=["openai"],
+        note="Cloud-Freigabe fuer semantische Analyse",
+    )
+
+    assert updated["rights"]["provider_data_scope"] == "cloud_approved"
+    assert updated["rights"]["approved_providers"] == ["openai"]
+    assert validate("asset", updated) == []
+
+
 def test_register_reference_person_with_full_consent_validates(
     asset_record, tmp_path: Path
 ) -> None:
