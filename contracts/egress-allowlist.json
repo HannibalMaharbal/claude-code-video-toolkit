@@ -36,6 +36,26 @@
       "reason": "TikTok-Layoutbezeichnung, keine Plattform-API-Ausführung."
     },
     {
+      "path": "tools/publish_adapters/__init__.py",
+      "pattern": "social_api",
+      "reason": "Adapter-Registry benennt Plattformen; send() ruft ausschließlich require_egress auf, kein Import einer Netzwerkbibliothek."
+    },
+    {
+      "path": "tools/publish_adapters/facebook.py",
+      "pattern": "social_api",
+      "reason": "Plattformname im Modul-/Klassennamen; send() ruft ausschließlich require_egress auf, kein Import einer Netzwerkbibliothek."
+    },
+    {
+      "path": "tools/publish_adapters/instagram.py",
+      "pattern": "social_api",
+      "reason": "Plattformname im Modul-/Klassennamen; send() ruft ausschließlich require_egress auf, kein Import einer Netzwerkbibliothek."
+    },
+    {
+      "path": "tools/publish_adapters/tiktok.py",
+      "pattern": "social_api",
+      "reason": "Plattformname im Modul-/Klassennamen; send() ruft ausschließlich require_egress auf, kein Import einer Netzwerkbibliothek."
+    },
+    {
       "path": "tools/music_gen.py",
       "pattern": "requests_send",
       "reason": "Bestehender Musikgenerator-Client; nur statisch erfasst."
