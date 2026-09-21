@@ -27,6 +27,7 @@ SCHEMAS = {
     "qc_verdict": "qc-verdict.schema.json",
     "platform_profiles": "platform-profiles.schema.json",
     "semantic_analysis": "semantic-analysis.schema.json",
+    "release_metadata": "release-metadata.schema.json",
 }
 PERSON_VIEWS_MIN = {"front", "profile", "three_quarter"}
 
