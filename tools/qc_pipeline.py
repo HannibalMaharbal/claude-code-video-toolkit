@@ -154,16 +154,33 @@ def run_qc(project_id: str, asset_id: str, *, retry_limit: int = 3) -> dict[str,
         raise QcPipelineError(f"Asset-Datei fehlt: {asset_id}")
 
     checks = _run_all_checks(asset_path, record)
-    digest = hashlib.sha256(
-        f"{asset_id}:{datetime.now(UTC).isoformat()}".encode()
-    ).hexdigest()
+    return write_verdict(project_id, asset_id, checks, retry_limit=retry_limit)
+
+
+def write_verdict(
+    project_id: str, asset_id: str, checks: list[dict[str, str]], *, retry_limit: int = 3
+) -> dict[str, Any]:
+    """Build, schema-validate, and write a fresh verdict from an externally computed
+    checks list (e.g. platform_export's profile-limit checks).
+
+    A freshly written verdict never carries overall=accept: only apply_review(),
+    with an attributed reviewer, may set that. _overall() itself can still return
+    "accept" for a checks list with no fail/needs_human entries (run_qc's own
+    checks never do, since the four visual checks are always needs_human, but a
+    caller's checks list may); that gets downgraded to needs_human here rather
+    than written as an unreviewed accept.
+    """
+    digest = hashlib.sha256(f"{asset_id}:{datetime.now(UTC).isoformat()}".encode()).hexdigest()
+    overall = _overall(checks)
+    if overall == "accept":
+        overall = "needs_human"
     verdict: dict[str, Any] = {
         "schema_version": "1.0.0",
         "verdict_id": f"qcv_{digest[:20]}",
         "asset_id": asset_id,
         "created_at": datetime.now(UTC).isoformat(),
         "checks": checks,
-        "overall": _overall(checks),
+        "overall": overall,
         "retry_count": 0,
         "retry_limit": retry_limit,
     }
@@ -194,7 +211,8 @@ def retry_qc(project_id: str, verdict_id: str) -> dict[str, Any]:
         raise QcPipelineError(f"Asset-Datei fehlt: {verdict['asset_id']}")
 
     verdict["checks"] = _run_all_checks(asset_path, record)
-    verdict["overall"] = _overall(verdict["checks"])
+    recomputed = _overall(verdict["checks"])
+    verdict["overall"] = "needs_human" if recomputed == "accept" else recomputed
     verdict["retry_count"] += 1
     verdict.pop("reviewer", None)
     _save_verdict(project_id, verdict)
