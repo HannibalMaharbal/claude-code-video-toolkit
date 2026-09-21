@@ -19,7 +19,7 @@ from typing import Any, cast
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tools import asset_record, platform_profiles, qc_pipeline, reframe
+from tools import asset_record, platform_profiles, project_init, qc_pipeline, reframe
 from tools.media_validation import MediaValidationError, validate_audio
 from tools.video_ingest import probe_media
 
@@ -195,6 +195,11 @@ def make_variant(
 
         checks = check_against_profile(output_path, profile)
         verdict = qc_pipeline.write_verdict(project_id, str(variant_record["asset_id"]), checks)
+
+        project_init.add_asset_id(project_id, master_asset_id)
+        project_init.add_asset_id(project_id, str(variant_record["asset_id"]))
+        if thumbnail_record is not None:
+            project_init.add_asset_id(project_id, str(thumbnail_record["asset_id"]))
 
     return {
         "variant_asset_id": variant_record["asset_id"],

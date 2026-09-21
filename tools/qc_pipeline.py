@@ -154,6 +154,7 @@ def run_qc(project_id: str, asset_id: str, *, retry_limit: int = 3) -> dict[str,
         raise QcPipelineError(f"Asset-Datei fehlt: {asset_id}")
 
     checks = _run_all_checks(asset_path, record)
+    project_init.add_asset_id(project_id, asset_id)
     return write_verdict(project_id, asset_id, checks, retry_limit=retry_limit)
 
 

@@ -55,6 +55,23 @@ def test_load_project_manifest_rejects_unknown_project(projects_root: Path) -> N
         project_init.load_project_manifest("does-not-exist")
 
 
+def test_add_asset_id_is_idempotent_and_sorted(projects_root: Path) -> None:
+    from contracts.validate_contracts import validate
+
+    project_init.init_project("demo-project")
+    asset_a = "ast_" + "b" * 12
+    asset_b = "ast_" + "a" * 12
+
+    project_init.add_asset_id("demo-project", asset_a)
+    manifest = project_init.add_asset_id("demo-project", asset_b)
+    project_init.add_asset_id("demo-project", asset_a)  # idempotent, no duplicate
+
+    assert manifest["asset_ids"] == sorted([asset_a, asset_b])
+    on_disk = project_init.load_project_manifest("demo-project")
+    assert on_disk["asset_ids"] == sorted([asset_a, asset_b])
+    assert validate("project", on_disk) == []
+
+
 def test_save_project_manifest_round_trips(projects_root: Path) -> None:
     manifest = project_init.init_project("demo-project")
     manifest["provenance_status"] = "internal_hash_graph"

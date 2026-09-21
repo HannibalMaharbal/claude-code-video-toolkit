@@ -63,6 +63,17 @@ def save_project_manifest(project_id: str, manifest: dict[str, Any]) -> None:
     temp.replace(path)
 
 
+def add_asset_id(project_id: str, asset_id: str) -> dict[str, Any]:
+    """Idempotently track an asset_id on a project's manifest (schema-validated)."""
+    manifest = load_project_manifest(project_id)
+    asset_ids = set(manifest.get("asset_ids") or [])
+    if asset_id not in asset_ids:
+        asset_ids.add(asset_id)
+        manifest["asset_ids"] = sorted(asset_ids)
+        save_project_manifest(project_id, manifest)
+    return manifest
+
+
 def init_project(project_id: str, *, brief_text: str = "") -> dict[str, Any]:
     """Create projects/<project_id>/ with its subfolders and a validated manifest."""
     if not PROJECT_ID_PATTERN.match(project_id):

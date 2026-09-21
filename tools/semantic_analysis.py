@@ -165,6 +165,8 @@ def ingest(project_id: str, result_path: Path) -> dict[str, Any]:
         operation="semantic_analysis",
         ai_generated="partial",
     )
+    project_init.add_asset_id(project_id, asset_id)
+    project_init.add_asset_id(project_id, str(derived["asset_id"]))
     return {"semantic_path": str(output_path), "asset_record": derived}
 
 
