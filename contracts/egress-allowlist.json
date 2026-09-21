@@ -36,6 +36,11 @@
       "reason": "TikTok-Layoutbezeichnung, keine Plattform-API-Ausführung."
     },
     {
+      "path": "tools/acceptance.py",
+      "pattern": "social_api",
+      "reason": "F20 listet die 13 Plattform-Profilnamen (u.a. \"tiktok\"); keine Plattform-API-Ausführung."
+    },
+    {
       "path": "tools/publish_adapters/__init__.py",
       "pattern": "social_api",
       "reason": "Adapter-Registry benennt Plattformen; send() ruft ausschließlich require_egress auf, kein Import einer Netzwerkbibliothek."

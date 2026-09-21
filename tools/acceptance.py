@@ -33,7 +33,7 @@ REPORT_STEM = f"ACCEPTANCE-{date.today().isoformat()}"
 REPORT_MARKDOWN = ROOT / "docs" / f"{REPORT_STEM}.md"
 REPORT_JSON = ROOT / "docs" / f"{REPORT_STEM}.json"
 STACK_MANIFEST = ROOT / "contracts" / "stack-manifest.json"
-CAPABILITY_IDS = tuple(f"F{number:02d}" for number in range(1, 20))
+CAPABILITY_IDS = tuple(f"F{number:02d}" for number in range(1, 26))
 
 
 @dataclass(frozen=True)
@@ -1172,6 +1172,325 @@ def _f19(work: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
     )
 
 
+def _f20(_: Path, __: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Platform profiles: all 13 present, schema-valid, and UNVERIFIED."""
+    from tools import platform_profiles
+
+    data = platform_profiles.load_profiles()
+    profiles = data["profiles"]
+    expected = {
+        "youtube_long", "youtube_short", "instagram_reel", "instagram_feed",
+        "facebook_video", "tiktok", "x_video", "website_hero",
+        "ecommerce_video", "ecommerce_image", "ad_16x9", "ad_1x1", "ad_9x16",
+    }
+    if set(profiles) != expected:
+        raise RuntimeError(f"Fehlende/zusätzliche Profile: {expected ^ set(profiles)}")
+    if not all(profile["status"] == "UNVERIFIED" for profile in profiles.values()):
+        raise RuntimeError("Nicht alle Profile starten als UNVERIFIED.")
+    return (
+        "13 Plattform-Profile vorhanden, schema-valide, alle UNVERIFIED.",
+        {name: profile["status"] for name, profile in profiles.items()},
+    )
+
+
+def _f21(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Reframe: no blind center-crop; with a spec, the crop follows the focus."""
+    from tools import reframe
+
+    try:
+        reframe.render(material["video"], "ad_9x16", work / "f21-blind.mp4")
+        raise RuntimeError("Center-Crop ohne Fokus-Spec wurde nicht abgelehnt.")
+    except reframe.ReframeError:
+        pass
+
+    def _render(cx: float, name: str) -> bytes:
+        spec = work / f"f21-focus-{name}.json"
+        spec.write_text(json.dumps({"keyframes": [{"t": 0.0, "cx": cx, "cy": 0.5}]}))
+        output = work / f"f21-{name}.mp4"
+        reframe.render(material["video"], "ad_1x1", output, focus_spec_path=spec)
+        return output.read_bytes()
+
+    left_bytes = _render(0.3, "left")
+    right_bytes = _render(0.7, "right")
+    if left_bytes == right_bytes:
+        raise RuntimeError("Unterschiedliche Fokuspunkte erzeugten identische Ausgabe.")
+
+    return (
+        "Reframe ohne Fokus-Spec abgelehnt (needs_human); mit Spec erzeugen "
+        "unterschiedliche Fokuspunkte nachweislich unterschiedliche Ausgaben.",
+        {"left_bytes": len(left_bytes), "right_bytes": len(right_bytes)},
+    )
+
+
+def _f22(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Semantic analysis: prepare extracts frames, cloud is rejected, ingest registers."""
+    from tools import asset_record, project_init, semantic_analysis
+
+    previous = (asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT)
+    asset_record.ASSET_ROOT = work / "asset-store-f22"
+    project_init.PROJECTS_ROOT = work / "projects-f22"
+    try:
+        project_init.init_project("acceptance-semantic")
+        source = asset_record.register_asset(material["video"])
+        prepared = semantic_analysis.prepare(
+            "acceptance-semantic", str(source["asset_id"]), interval_s=1.0, max_frames=3
+        )
+        if not prepared["frames"]:
+            raise RuntimeError("prepare erzeugte keine Frames.")
+
+        try:
+            semantic_analysis.prepare(
+                "acceptance-semantic", str(source["asset_id"]), requested_scope="cloud"
+            )
+            raise RuntimeError("Cloud-Anfrage ohne Freigabe wurde nicht abgelehnt.")
+        except semantic_analysis.SemanticAnalysisError:
+            pass
+
+        result_path = work / "f22-result.json"
+        result_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0.0",
+                    "asset_id": source["asset_id"],
+                    "analyzer": {"name": "acceptance-agent", "version": "1.0", "scope": "local"},
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "highlights": [
+                        {"start_s": 0.0, "end_s": 1.0, "reason": "Testabschnitt", "score": 0.5}
+                    ],
+                    "topics": ["acceptance"],
+                    "subject_boxes": [],
+                }
+            )
+        )
+        outcome = semantic_analysis.ingest("acceptance-semantic", result_path)
+        if outcome["asset_record"]["ai_involvement"]["ai_generated"] != "partial":
+            raise RuntimeError("ingest registrierte nicht ai_generated=partial.")
+    finally:
+        asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT = previous
+
+    return (
+        "prepare extrahiert Frames; Cloud-Anfrage ohne Freigabe abgelehnt und geloggt; "
+        "ingest validiert das Ergebnis und registriert es als ai_generated=partial.",
+        {"frames": len(prepared["frames"]), "semantic_asset_id": outcome["asset_record"]["asset_id"]},
+    )
+
+
+def _f23(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Provenance: report written, provenance_status and ai_labeling_status set."""
+    from tools import asset_record, project_init, provenance_report
+
+    previous = (asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT)
+    asset_record.ASSET_ROOT = work / "asset-store-f23"
+    project_init.PROJECTS_ROOT = work / "projects-f23"
+    try:
+        project_init.init_project("acceptance-provenance")
+        source = asset_record.register_asset(material["video"], ai_generated="none")
+        project_init.add_asset_id("acceptance-provenance", str(source["asset_id"]))
+
+        report, json_path, md_path = provenance_report.write_report("acceptance-provenance")
+        if not json_path.is_file() or not md_path.is_file():
+            raise RuntimeError("Provenance-Berichte wurden nicht geschrieben.")
+        if not report["c2pa_manifests"]:
+            raise RuntimeError("C2PA-Manifeste fehlen.")
+        manifest = project_init.load_project_manifest("acceptance-provenance")
+        if manifest["provenance_status"] != "internal_hash_graph":
+            raise RuntimeError("provenance_status wurde nicht gesetzt.")
+
+        provenance_report.set_labeling(
+            "acceptance-provenance", "assessed_not_required", note="Kein KI-Inhalt",
+            by="acceptance-run",
+        )
+        manifest = project_init.load_project_manifest("acceptance-provenance")
+        if manifest["ai_labeling_status"] != "assessed_not_required":
+            raise RuntimeError("set-labeling hat ai_labeling_status nicht gesetzt.")
+    finally:
+        asset_record.ASSET_ROOT, project_init.PROJECTS_ROOT = previous
+
+    return (
+        "Provenance-Bericht (JSON+MD, inkl. unsigniertem C2PA-Mapping) erzeugt; "
+        "provenance_status und ai_labeling_status gesetzt.",
+        {"json_path": str(json_path), "assets": len(report["asset_graphs"])},
+    )
+
+
+def _provision_verified_ad1x1_release(
+    work: Path, material: dict[str, Path], suffix: str
+) -> dict[str, Any]:
+    """Shared setup for F24/F25: isolated roots, one VERIFIED ad_1x1 profile override,
+    and a QC-accepted source->master->variant chain. Caller restores `previous` roots."""
+    from tools import asset_record, delivery_gate, platform_profiles, project_init, qc_pipeline
+
+    previous = {
+        "asset_root": asset_record.ASSET_ROOT,
+        "gate_root": delivery_gate.ASSET_ROOT,
+        "projects_root": project_init.PROJECTS_ROOT,
+        "profiles_path": platform_profiles.PROFILES_PATH,
+    }
+    asset_root = work / f"asset-store-{suffix}"
+    asset_record.ASSET_ROOT = asset_root
+    delivery_gate.ASSET_ROOT = asset_root
+    project_init.PROJECTS_ROOT = work / f"projects-{suffix}"
+
+    profiles_data = json.loads(previous["profiles_path"].read_text(encoding="utf-8"))
+    profiles_data["profiles"]["ad_1x1"]["status"] = "VERIFIED"
+    profiles_data["profiles"]["ad_1x1"]["verified_at"] = datetime.now(UTC).isoformat()
+    profiles_data["profiles"]["ad_1x1"]["source_url"] = "https://example.invalid/ad-1x1-docs"
+    temp_profiles = work / f"{suffix}-platform-profiles.json"
+    temp_profiles.write_text(json.dumps(profiles_data))
+    platform_profiles.PROFILES_PATH = temp_profiles
+
+    project_id = f"acceptance-release-{suffix}"
+    project_init.init_project(project_id)
+    source = asset_record.register_asset(
+        material["video"], ai_generated="none", rights_status="OWNED",
+        commercial_use="allowed", person_consent="not_needed",
+    )
+    master_path = work / f"{suffix}-master.mp4"
+    _run(
+        [
+            "ffmpeg", "-y", "-ss", "0", "-t", "1", "-i", str(material["video"]),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(master_path),
+        ]
+    )
+    master_record = asset_record.register_derived(
+        master_path, parents=[str(source["asset_id"])], role="MASTER",
+        tool="ffmpeg", operation="trim",
+    )
+    variant_path = work / f"{suffix}-variant.mp4"
+    _run(
+        [
+            "ffmpeg", "-y", "-ss", "0", "-t", "0.9", "-i", str(material["video"]),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(variant_path),
+        ]
+    )
+    variant_record = asset_record.register_derived(
+        variant_path, parents=[str(master_record["asset_id"])], role="VARIANT",
+        tool="platform_export", operation="variant_ad_1x1",
+    )
+    for asset_id in (source["asset_id"], master_record["asset_id"], variant_record["asset_id"]):
+        project_init.add_asset_id(project_id, str(asset_id))
+    for asset_id in (master_record["asset_id"], variant_record["asset_id"]):
+        verdict = qc_pipeline.run_qc(project_id, str(asset_id))
+        qc_pipeline.apply_review(
+            project_id, verdict["verdict_id"], reviewer="acceptance-run", overall="accept"
+        )
+
+    return {
+        "previous": previous,
+        "project_id": project_id,
+        "variant_asset_id": str(variant_record["asset_id"]),
+    }
+
+
+def _write_release_metadata(project_id: str) -> None:
+    from tools import project_init
+
+    metadata_path = project_init.PROJECTS_ROOT / project_id / "specs" / "release-metadata.json"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "version": "1.0",
+                "targets": {
+                    "ad_1x1": {
+                        "title": "Acceptance-Anzeige",
+                        "description": "Testbeschreibung fuer die Acceptance-Suite.",
+                        "hashtags": ["#acceptance"],
+                        "alt_text": "Testbild mit Text",
+                        "language": "de",
+                        "thumbnail_asset_id": None,
+                        "visibility": "private",
+                    }
+                },
+            }
+        )
+    )
+
+
+def _restore_release_roots(previous: dict[str, Any]) -> None:
+    from tools import asset_record, delivery_gate, platform_profiles, project_init
+
+    asset_record.ASSET_ROOT = previous["asset_root"]
+    delivery_gate.ASSET_ROOT = previous["gate_root"]
+    project_init.PROJECTS_ROOT = previous["projects_root"]
+    platform_profiles.PROFILES_PATH = previous["profiles_path"]
+
+
+def _f24(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Release package: rejected without labeling/provenance/metadata, built once
+    all gates pass, and unapproved until approve() is called explicitly."""
+    from tools import provenance_report, release_package
+
+    provisioned = _provision_verified_ad1x1_release(work, material, "f24")
+    project_id, variant_asset_id = provisioned["project_id"], provisioned["variant_asset_id"]
+    try:
+        try:
+            release_package.create(project_id, {"ad_1x1": variant_asset_id})
+            raise RuntimeError("Release ohne Labeling/Provenance/Metadaten wurde nicht abgelehnt.")
+        except release_package.ReleasePackageError:
+            pass
+
+        provenance_report.set_labeling(
+            project_id, "assessed_not_required", note="Testfreigabe", by="acceptance-run"
+        )
+        provenance_report.write_report(project_id)
+        _write_release_metadata(project_id)
+
+        result = release_package.create(project_id, {"ad_1x1": variant_asset_id})
+        package_dir = Path(result["ad_1x1"]["package_dir"])
+        if release_package.is_approved(package_dir):
+            raise RuntimeError("Paket war vor approve() bereits freigegeben.")
+        release_package.approve(package_dir, by="acceptance-run")
+        if not release_package.is_approved(package_dir):
+            raise RuntimeError("approve() hat das Paket nicht freigegeben.")
+    finally:
+        _restore_release_roots(provisioned["previous"])
+
+    return (
+        "Release-Paket ohne Labeling/Provenance/Metadaten abgelehnt; mit allen dreien "
+        "erzeugt und erst nach approve() freigegeben.",
+        {"package_dir": str(package_dir)},
+    )
+
+
+def _f25(work: Path, material: dict[str, Path]) -> tuple[str, dict[str, Any]]:
+    """Publish adapters: validate() passes on an approved package; send() stays blocked."""
+    from tools import provenance_report, release_package
+    from tools.egress_guard import EgressBlocked
+    from tools.publish_adapters import ADAPTERS
+
+    provisioned = _provision_verified_ad1x1_release(work, material, "f25")
+    project_id, variant_asset_id = provisioned["project_id"], provisioned["variant_asset_id"]
+    try:
+        provenance_report.set_labeling(
+            project_id, "assessed_not_required", note="Testfreigabe", by="acceptance-run"
+        )
+        provenance_report.write_report(project_id)
+        _write_release_metadata(project_id)
+        result = release_package.create(project_id, {"ad_1x1": variant_asset_id})
+        package_dir = Path(result["ad_1x1"]["package_dir"])
+        release_package.approve(package_dir, by="acceptance-run")
+
+        for name, adapter_cls in ADAPTERS.items():
+            adapter = adapter_cls(package_dir)
+            findings = adapter.validate()
+            if findings:
+                raise RuntimeError(f"Adapter {name} meldete unerwartete Befunde: {findings}")
+            try:
+                adapter.send()
+                raise RuntimeError(f"Adapter {name}.send() wurde nicht blockiert.")
+            except EgressBlocked:
+                pass
+    finally:
+        _restore_release_roots(provisioned["previous"])
+
+    return (
+        "Alle 5 Publish-Adapter validieren das freigegebene Paket ohne Befunde; send() "
+        "bleibt für jeden Adapter durch den Egress-Guard blockiert.",
+        {"adapters": sorted(ADAPTERS)},
+    )
+
+
 def run_baseline() -> list[Result]:
     with tempfile.TemporaryDirectory(prefix="video-toolkit-acceptance-") as temporary:
         work = Path(temporary)
@@ -1201,6 +1520,12 @@ def run_baseline() -> list[Result]:
             lambda: _result("F17", lambda: _f17(work, material)),
             lambda: _result("F18", lambda: _f18(work, material)),
             lambda: _result("F19", lambda: _f19(work, material)),
+            lambda: _result("F20", lambda: _f20(work, material)),
+            lambda: _result("F21", lambda: _f21(work, material)),
+            lambda: _result("F22", lambda: _f22(work, material)),
+            lambda: _result("F23", lambda: _f23(work, material)),
+            lambda: _result("F24", lambda: _f24(work, material)),
+            lambda: _result("F25", lambda: _f25(work, material)),
         ]
         return [operation() for operation in operations]
 
