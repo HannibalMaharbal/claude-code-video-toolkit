@@ -155,7 +155,7 @@ Before gathering configuration, check if we're in a project context:
    **ElevenLabs — Per-scene mode (recommended):**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --scene-dir public/audio/scenes \
      --json
    ```
@@ -163,7 +163,7 @@ Before gathering configuration, check if we're in a project context:
    **ElevenLabs — With concat for SadTalker:**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --scene-dir public/audio/scenes \
      --concat public/audio/voiceover-concat.mp3 \
      --json
@@ -172,7 +172,7 @@ Before gathering configuration, check if we're in a project context:
    **ElevenLabs — Single-file mode (legacy):**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --script "SCRIPT_PATH" \
      --output "public/audio/voiceover.mp3" \
      --json
@@ -181,7 +181,7 @@ Before gathering configuration, check if we're in a project context:
    **Qwen3-TTS — Per-scene mode:**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --provider qwen3 \
      --speaker SPEAKER_NAME \
      --scene-dir public/audio/scenes \
@@ -191,7 +191,7 @@ Before gathering configuration, check if we're in a project context:
    **Qwen3-TTS — With brand clone profile:**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --provider qwen3 \
      --brand BRAND_NAME \
      --scene-dir public/audio/scenes \
@@ -201,7 +201,7 @@ Before gathering configuration, check if we're in a project context:
    **Qwen3-TTS — With tone preset:**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --provider qwen3 \
      --speaker Ryan \
      --tone warm \
@@ -212,7 +212,7 @@ Before gathering configuration, check if we're in a project context:
    **Qwen3-TTS — With custom instruction (overrides --tone):**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --provider qwen3 \
      --speaker Ryan \
      --instruct "Speak warmly and calmly" \
@@ -223,7 +223,7 @@ Before gathering configuration, check if we're in a project context:
    **Qwen3-TTS — Single-file mode:**
    ```bash
    cd PROJECT_DIR
-   python /Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py \
+   python $HOME/PROJEKTE/video-toolkit/tools/voiceover.py \
      --provider qwen3 \
      --speaker Ryan \
      --script "SCRIPT_PATH" \
@@ -264,8 +264,8 @@ Before gathering configuration, check if we're in a project context:
 
 ## Tool Location
 
-- Voiceover tool: `/Users/constantinbarhoumi/claude-code-video-toolkit/tools/voiceover.py`
-- Qwen3-TTS tool: `/Users/constantinbarhoumi/claude-code-video-toolkit/tools/qwen3_tts.py`
+- Voiceover tool: `$HOME/PROJEKTE/video-toolkit/tools/voiceover.py`
+- Qwen3-TTS tool: `$HOME/PROJEKTE/video-toolkit/tools/qwen3_tts.py`
 - Config: `_internal/toolkit-registry.json` (voice ID)
 - API Key: `.env` file (`MODAL_QWEN3_TTS_ENDPOINT_URL` for Qwen3-TTS, `ELEVENLABS_API_KEY` for ElevenLabs)
 
