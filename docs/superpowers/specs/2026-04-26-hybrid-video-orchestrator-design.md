@@ -1,7 +1,7 @@
 # Hybrid Video Orchestrator — Design Spec
 **Datum:** 2026-04-26
 **Status:** Approved
-**Autor:** Constantin Barhoumi
+**Autor:** Hannibal
 
 ---
 
