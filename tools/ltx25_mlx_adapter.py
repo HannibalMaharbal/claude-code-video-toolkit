@@ -95,6 +95,12 @@ def generate_video(
         cmd += ["--image", image]
     if seed is not None:
         cmd += ["--seed", str(seed)]
+    if mode in ("two-stage", "two-stages-hq"):
+        # Documented opt-in accelerator for exactly these two modes
+        # (per `ltx-2-mlx generate --help`). Thresh 0.7 and 16 stage-1 steps
+        # (vs. the HQ default of 15/standard default of 30) are an explicit
+        # user-requested speed/quality trade-off, not the tool's own default.
+        cmd += ["--enable-teacache", "--teacache-thresh", "0.7", "--stage1-steps", "16"]
 
     if verbose:
         print(
