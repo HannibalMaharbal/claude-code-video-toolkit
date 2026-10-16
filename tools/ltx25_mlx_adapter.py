@@ -109,7 +109,13 @@ def generate_video(
         )
 
     start_time = time.time()
-    proc = subprocess.run(cmd, cwd=RUNTIME_DIR, capture_output=True, text=True, timeout=4 * 60 * 60)
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    env["MLX_METAL_JIT_CACHE"] = "1"
+    try:
+        proc = subprocess.run(cmd, cwd=RUNTIME_DIR, capture_output=True, text=True, timeout=1800, env=env)
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "LTX-2.5 Generierung nach 30 Minuten wegen Zeitlimit kontrolliert abgebrochen."}
     elapsed_ms = int((time.time() - start_time) * 1000)
 
     if proc.returncode != 0:
