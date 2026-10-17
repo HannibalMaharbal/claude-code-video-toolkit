@@ -4,13 +4,15 @@ version = "0.14.4"
 description = "Local and cloud-assisted video production toolkit"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "argostranslate>=1.11.0",
   "boto3>=1.28.0",
-  "elevenlabs>=1.0.0",
+  "jsonschema>=4.26.0",
   "kokoro-onnx>=0.4.0",
   "matplotlib>=3.7",
   "mlx-whisper>=0.4.0",
   "modal>=1.4.0",
   "moviepy>=2.0",
+  "opentimelineio>=0.18.1",
   "pillow>=10.0",
   "playwright==1.63.0",
   "python-dotenv>=1.0.0",
@@ -20,6 +22,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# On-device voice cloning and local dubbing (Apple Silicon / MLX).
+# The 2.52 GB model is downloaded separately with tools/local_voice.py --setup.
+local-voice = [
+  "mlx-audio==0.5.4",
+]
 # Burned karaoke captions in templates/concept-explainer-short (word-level
 # forced alignment). Reuses the torch already pulled by mlx-whisper (core).
 # tools/transcribe.py does NOT need this — it uses mlx-whisper (Apple
