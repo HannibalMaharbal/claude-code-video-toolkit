@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,20 +70,22 @@ def validate_manifest(
         # 1. Pfad-Traversal-Schutz: Verhindere ".." Ausbrüche
         if ".." in p.parts:
             report.errors.append(
-                f"Sicherheits-Fehler ({asset_name}): Pfad-Traversal ('..') ist verboten: {rel_or_abs}"
+                f"Sicherheits-Fehler ({asset_name}): "
+                f"Pfad-Traversal ('..') ist verboten: {rel_or_abs}"
             )
             report.is_valid = False
             return None
 
         resolved = (base_path / p) if not p.is_absolute() else p
-        
+
         # 2. Workspace-Jail: Datei muss innerhalb des Basisverzeichnisses liegen
         try:
             resolved_real = resolved.resolve()
             base_real = base_path.resolve()
             if not resolved_real.is_relative_to(base_real):
                 report.errors.append(
-                    f"Sicherheits-Fehler ({asset_name}): Datei liegt außerhalb des Projekts: {resolved}"
+                    f"Sicherheits-Fehler ({asset_name}): "
+                    f"Datei liegt außerhalb des Projekts: {resolved}"
                 )
                 report.is_valid = False
                 return None
@@ -96,7 +97,8 @@ def validate_manifest(
         # 3. Symlink-Sperre: Verhindere Cache-Spoofing über Symlinks
         if resolved.is_symlink():
             report.errors.append(
-                f"Sicherheits-Fehler ({asset_name}): Symlinks sind im Produktions-Manifest verboten: {resolved}"
+                f"Sicherheits-Fehler ({asset_name}): "
+                f"Symlinks sind im Produktions-Manifest verboten: {resolved}"
             )
             report.is_valid = False
             return None
@@ -153,10 +155,12 @@ def validate_manifest(
 
     for idx, shot in enumerate(shots, start=1):
         shot_id = shot.get("id", f"shot-{idx:03d}")
-        
+
         # Doppelte Shot-IDs abfangen
         if shot_id in seen_shot_ids:
-            report.errors.append(f"Doppelte Shot-ID entdeckt: '{shot_id}'. IDs müssen eindeutig sein!")
+            report.errors.append(
+                f"Doppelte Shot-ID entdeckt: '{shot_id}'. IDs müssen eindeutig sein!"
+            )
             report.is_valid = False
         seen_shot_ids.add(shot_id)
 
@@ -244,15 +248,17 @@ def validate_manifest(
         report.handle_reserve_pct = round(reserve_pct, 1)
 
         if total_planned_sec < target_duration:
+            missing_sec = target_duration - total_planned_sec
             report.errors.append(
                 f"Gesamtlaufzeit unzureichend! Geplant: {total_planned_sec:.1f}s, "
-                f"Ziel: {target_duration:.1f}s. Es fehlen {target_duration - total_planned_sec:.1f}s Material!"
+                f"Ziel: {target_duration:.1f}s. Es fehlen {missing_sec:.1f}s Material!"
             )
             report.is_valid = False
         elif reserve_pct < min_handle_reserve_pct:
             report.warnings.append(
                 f"Knappe Handle-Reserve: Nur {reserve_pct:.1f}% Puffer "
-                f"({reserve_sec:.1f}s Verschnitt-Reserve). Empfohlen: mind. {min_handle_reserve_pct}%."
+                f"({reserve_sec:.1f}s Verschnitt-Reserve). "
+                f"Empfohlen: mind. {min_handle_reserve_pct}%."
             )
 
     if len(report.errors) > 0:
@@ -264,10 +270,23 @@ def validate_manifest(
 def main() -> int:
     parser = argparse.ArgumentParser(description="HANNIBAL AI OS Pre-Flight Validation Gate")
     parser.add_argument("--manifest", "-m", required=True, help="Pfad zur project_manifest.json")
-    parser.add_argument("--base-dir", "-b", help="Basisverzeichnis für relative Pfade (Standard: Manifest-Ordner)")
-    parser.add_argument("--min-reserve", type=float, default=10.0, help="Mindest-Handle-Reserve in %% (Default: 10.0)")
-    parser.add_argument("--skip-hash-enforcement", action="store_true", help="Nur Existenz prüfen, Hash-Abweichungen als Warnung")
-    parser.add_argument("--json", action="store_true", help="Ergebnis als maschinenlesbares JSON ausgeben")
+    parser.add_argument(
+        "--base-dir", "-b", help="Basisverzeichnis für relative Pfade (Standard: Manifest-Ordner)"
+    )
+    parser.add_argument(
+        "--min-reserve",
+        type=float,
+        default=10.0,
+        help="Mindest-Handle-Reserve in %% (Default: 10.0)",
+    )
+    parser.add_argument(
+        "--skip-hash-enforcement",
+        action="store_true",
+        help="Nur Existenz prüfen, Hash-Abweichungen als Warnung",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Ergebnis als maschinenlesbares JSON ausgeben"
+    )
 
     args = parser.parse_args()
     manifest_path = Path(args.manifest).resolve()
@@ -277,7 +296,7 @@ def main() -> int:
         return 1
 
     try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
+        with open(manifest_path, encoding="utf-8") as f:
             manifest_data = json.load(f)
     except Exception as e:
         print(f"FATAL: Manifest {manifest_path} ist kein gültiges JSON: {e}", file=sys.stderr)

@@ -96,11 +96,13 @@ def parse_whisper_words(transcript_data: list[dict[str, Any]] | dict[str, Any]) 
                         seg_dur = max(e - s, 0.1)
                         token_dur = seg_dur / len(tokens)
                         for idx, tok in enumerate(tokens):
-                            items.append({
-                                "word": tok,
-                                "start": round(s + (idx * token_dur), 2),
-                                "end": round(s + ((idx + 1) * token_dur), 2),
-                            })
+                            items.append(
+                                {
+                                    "word": tok,
+                                    "start": round(s + (idx * token_dur), 2),
+                                    "end": round(s + ((idx + 1) * token_dur), 2),
+                                }
+                            )
         else:
             items = []
     else:
@@ -116,7 +118,9 @@ def parse_whisper_words(transcript_data: list[dict[str, Any]] | dict[str, Any]) 
     return words_out
 
 
-def build_caption_chunks(words: list[WordTiming], max_words_per_chunk: int = 4, fps: int = 30) -> list[CaptionChunk]:
+def build_caption_chunks(
+    words: list[WordTiming], max_words_per_chunk: int = 4, fps: int = 30
+) -> list[CaptionChunk]:
     """
     Gruppiert Wörter in kompakte 3-4 Wörter-Blöcke für maximale Lesbarkeit.
     """
@@ -170,7 +174,7 @@ def generate_remotion_social_props(
     Liest Transcript, baut Chunks und schreibt remotion inputProps JSON.
     """
     t_path = Path(transcript_json_path).resolve()
-    with open(t_path, "r", encoding="utf-8") as f:
+    with open(t_path, encoding="utf-8") as f:
         t_data = json.load(f)
 
     words = parse_whisper_words(t_data)
@@ -203,8 +207,12 @@ def generate_remotion_social_props(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Remotion Social 9:16 Captions Props Generator")
     parser.add_argument("--video", "-v", required=True, help="Pfad zum Roh- oder Schnittvideo")
-    parser.add_argument("--transcript", "-t", required=True, help="Pfad zur Whisper-JSON-Transkription")
-    parser.add_argument("--output", "-o", default="social_props.json", help="Ausgabepfad für Remotion Props JSON")
+    parser.add_argument(
+        "--transcript", "-t", required=True, help="Pfad zur Whisper-JSON-Transkription"
+    )
+    parser.add_argument(
+        "--output", "-o", default="social_props.json", help="Ausgabepfad für Remotion Props JSON"
+    )
     parser.add_argument("--duration", "-d", type=float, default=60.0, help="Videodauer in Sekunden")
     parser.add_argument("--fps", type=int, default=30, help="Frames per second (Standard: 30)")
 

@@ -16,12 +16,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 
 @dataclass
@@ -264,7 +262,7 @@ def build_timeline_project_from_manifest(manifest_path: Path | str) -> TimelineP
     Erstellt ein TimelineProject direkt aus einem project_manifest.json.
     """
     m_path = Path(manifest_path).resolve()
-    with open(m_path, "r", encoding="utf-8") as f:
+    with open(m_path, encoding="utf-8") as f:
         data = json.load(f)
 
     base_dir = m_path.parent
@@ -312,7 +310,7 @@ def build_timeline_project_from_manifest(manifest_path: Path | str) -> TimelineP
                 frame=current_frame,
                 name=f"Color Pass: {shot_id}",
                 color="cyan",
-                note=f"Grade scene matching master asset.",
+                note="Grade scene matching master asset.",
             )
         )
         current_frame += dur_frames
@@ -322,14 +320,20 @@ def build_timeline_project_from_manifest(manifest_path: Path | str) -> TimelineP
     if "voiceover" in audio_assets:
         vo_raw = audio_assets["voiceover"].get("path")
         if vo_raw:
-            tp.voiceover_path = (base_dir / vo_raw) if not Path(vo_raw).is_absolute() else Path(vo_raw)
-            tp.voiceover_duration_frames = int(audio_assets["voiceover"].get("duration_sec", current_frame / fps) * fps)
+            tp.voiceover_path = (
+                (base_dir / vo_raw) if not Path(vo_raw).is_absolute() else Path(vo_raw)
+            )
+            tp.voiceover_duration_frames = int(
+                audio_assets["voiceover"].get("duration_sec", current_frame / fps) * fps
+            )
 
     if "bgm" in audio_assets:
         bgm_raw = audio_assets["bgm"].get("path")
         if bgm_raw:
             tp.bgm_path = (base_dir / bgm_raw) if not Path(bgm_raw).is_absolute() else Path(bgm_raw)
-            tp.bgm_duration_frames = int(audio_assets["bgm"].get("duration_sec", current_frame / fps) * fps)
+            tp.bgm_duration_frames = int(
+                audio_assets["bgm"].get("duration_sec", current_frame / fps) * fps
+            )
 
     return tp
 
@@ -348,7 +352,9 @@ def main() -> int:
         return 1
 
     tp = build_timeline_project_from_manifest(manifest_path)
-    base_out = Path(args.output).resolve() if args.output else manifest_path.parent / f"{tp.name}_timeline"
+    base_out = (
+        Path(args.output).resolve() if args.output else manifest_path.parent / f"{tp.name}_timeline"
+    )
 
     if args.format in ("fcpxml", "both"):
         fcpxml_path = base_out.with_suffix(".fcpxml")

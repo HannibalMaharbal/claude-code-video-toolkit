@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 from tools.remotion_social import (
     WordTiming,
     build_caption_chunks,
@@ -55,15 +54,17 @@ def test_build_caption_chunks_chunking():
 def test_generate_remotion_social_props(tmp_path: Path):
     t_file = tmp_path / "transcript.json"
     t_file.write_text(
-        json.dumps({
-            "segments": [
-                {
-                    "start": 0.0,
-                    "end": 1.5,
-                    "text": "Willkommen im Café",
-                }
-            ]
-        }),
+        json.dumps(
+            {
+                "segments": [
+                    {
+                        "start": 0.0,
+                        "end": 1.5,
+                        "text": "Willkommen im Café",
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     v_file = tmp_path / "video.mp4"

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import pytest
-from tools.preflight_gate import compute_sha256, validate_manifest
+
+from tools.preflight_gate import validate_manifest
 
 
 @pytest.fixture
@@ -143,4 +143,3 @@ def test_preflight_rejects_symlinks(sample_workspace):
     report = validate_manifest(manifest, base_dir=base_dir)
     assert report.is_valid is False
     assert any("Symlinks sind im Produktions-Manifest verboten" in err for err in report.errors)
-
