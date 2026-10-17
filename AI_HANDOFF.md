@@ -47,18 +47,22 @@
 
 - Datum: 2026-10-17. Schreibender Agent: Antigravity CLI.
 - Task-ID: `AUDIT-VIDEO-PIPELINE-INTEGRITY-20261017-01`.
-- Reviewer: Unabhängiger Read-Only Reviewer / Hannibal.
+- Status: **Audit-Baselines festgelegt; Tests 14/14 bestanden; Artefakte kryptografisch inventarisiert; Paket bereit für unabhängiges read-only Review.**
+- Git-Baselines:
+  - Code-Stand (`video-toolkit`): Commit `5dfb86b` (Branch `chore/ltx25-adapter`, Vorgänger-Basis: `c2a323c`)
+  - Dokumentations- & Pre-Review-Stand (`~` / `_SYSTEM`): Commit `ea02c94d` (Branch `main`, Vorgänger-Basis: `7dba6c93`)
 - Umfang:
   1. `tools/preflight_gate.py`: Fail-Closed Manifest- und Provenienz-Prüfung (`derived_from_master_sha256 == hash(master)`), Pfad-Traversal-Sperre, Jail-Escape-Sperre, Symlink-Sperre, Verbot doppelter Shot-IDs, Verbot von Wildcards (`scene_*.jpg`).
   2. Mathematische Puffer-Matrix: Präzise Trennung von 10–15% Mindestreserve (66–69s) und 28–47% Hollywood-Produktionsreserve (77–88s).
   3. `tools/timeline_export.py`: DaVinci Resolve Timeline-Export als FCPXML v1.9 und OpenTimelineIO (.otio) mit robuster relativer Pfadauflösung.
   4. `tools/remotion_social.py`: Remotion Social 9:16 Captions & Safe Zone Autopilot (1080x1920, Y=850–1350).
   5. Pipeline-Integration: `~/.local/bin/hannibal-video-pipeline` bindet `preflight_gate.py` in Phase 1 vor jeder GPU-Inferenz fail-closed ein.
-  6. Dokumentation: `docs/HANNIBAL-VIDEO-PIPELINE.md` und `docs/HANNIBAL-CINEMA-STUDIO-PLAN.md` aktualisiert.
-- Verifikation:
+  6. Dokumentation: `docs/HANNIBAL-VIDEO-PIPELINE.md`, `docs/HANNIBAL-CINEMA-STUDIO-PLAN.md` und Pre-Review-Statusbericht `docs/VIDEO-PIPELINE-PRODUKTIONSREIFE-PRE-REVIEW-2026-10-17.md` aktualisiert.
+- Verifikation & kryptografisches Artefaktmanifest (`out/audit_artifacts_manifest.json`):
   - Pytest: 14/14 Tests PASS (`tests/test_preflight_gate.py`, `tests/test_timeline_export.py`, `tests/test_remotion_social.py`).
-  - Remotion Smoke Test: `out/smoke_test.mp4` gerendert und per `ffprobe` verifiziert (h264, 960x540, 30fps, 1.033s).
-  - DaVinci FCPXML Export: `out/davinci_smoke_test.fcpxml` und `out/davinci_smoke_test.otio` erzeugt, Asset-URI verifiziert.
+  - Remotion Smoke Test: `out/smoke_test.mp4` (16.443 Bytes, SHA-256 `4e3eff180a16e391a85fec76db5336369e1a507e3a79c13e3b66a91c8a186f5e`, ffprobe: h264, 960x540, 30fps, 1.033s).
+  - DaVinci FCPXML Export: `out/davinci_smoke_test.fcpxml` (872 Bytes, SHA-256 `9dbf463151c6e306faecbb7e0359f9f9e56856892406fd46743cc0aa4d32a757`).
+  - OpenTimelineIO Export: `out/davinci_smoke_test.otio` (2.966 Bytes, SHA-256 `7f13a20f9903a5bc76a3ec542ba3a3c025061c6b72c8a66ea5e0c8218e266e46`).
 
 - Datum: 2026-09-05
 - Schreibender Agent: Codex (Interims-Hauptagent)
