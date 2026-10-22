@@ -170,8 +170,8 @@ SCENE_PRESETS = {
         "instrumental": True,
     },
     "ugc-viral-hook": {
-        "description": "UGC Viral Hook — immediate punch, catchy upbeat rhythm, high engagement for Reels/Shorts",
-        "prompt": "Viral energetic TikTok sound, catchy rhythmic hook, punchy bass drop, modern synth lead, high retention and engagement",
+        "description": "UGC Viral Hook — immediate punch, catchy upbeat rhythm, high engagement for short-form video",
+        "prompt": "Viral energetic video sound, catchy rhythmic hook, punchy bass drop, modern synth lead, high retention and engagement",
         "bpm": 128,
         "key_scale": "E Minor",
         "instrumental": True,

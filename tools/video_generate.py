@@ -45,10 +45,10 @@ TIER_MODELS = {
     },
     "cloud": {
         "default": "wan3_0",
-        "models": ["wan3_0", "wan3_0_prime", "minimax_h3", "minimax_h3_max"],
-        "cost_per_sec": 0.10,  # ~0.10 $/s for Wan 3.0, ~0.13 $/s for H3 2K
+        "models": ["wan3_0", "wan3_0_prime", "minimax_h3", "minimax_h3_max", "seedance_2_mini"],
+        "cost_per_sec": 0.10,  # ~0.10 $/s for Wan 3.0, ~0.13 $/s for H3 2K, ~0.03 $/s for Seedance 2 Mini
         "locality": "cloud",
-        "description": "Economic Cloud Workhorse (Wan 3.0 für T2V/Audio, MiniMax H3 für I2V/Ref-V2V)",
+        "description": "Economic Cloud Workhorse (Wan 3.0, MiniMax H3, Seedance 2 Mini via Higgsfield)",
     },
     "premium": {
         "default": "seedance_2_5",
@@ -72,6 +72,7 @@ MODEL_TO_TIER = {
     "wan3_0_prime": "cloud",
     "minimax_h3": "cloud",
     "minimax_h3_max": "cloud",
+    "seedance_2_mini": "cloud",
     "seedance_2_5": "premium",
     "seedance_2_0": "premium",
     "topaz_hyperion_2_5": "upscale",
@@ -79,10 +80,15 @@ MODEL_TO_TIER = {
     "video_upscale": "upscale",
 }
 
+# Specific model overrides for rates
+MODEL_RATES = {
+    "seedance_2_mini": 0.03,  # ~10x cost reduction compared to Seedance 2.5
+}
+
 
 def _estimate_cost(model: str, duration: int, has_ref_video: bool = False) -> dict[str, Any]:
     tier = MODEL_TO_TIER.get(model, "cloud")
-    rate = TIER_MODELS[tier]["cost_per_sec"]
+    rate = MODEL_RATES.get(model, TIER_MODELS[tier]["cost_per_sec"])
     ref_factor = 1.4 if (has_ref_video and tier not in ("draft", "upscale")) else 1.0
     estimated_usd = round(duration * rate * ref_factor, 2)
     return {
@@ -292,6 +298,12 @@ def main() -> int:
         help="Skip the automatic local VideoToolbox CAS 1080p sharpening pass",
     )
     parser.add_argument("--continue-from", help="Continue previous video clip (End-Frame lock)")
+    parser.add_argument(
+        "--motion-profile",
+        choices=["auto", "steady-workspace", "occlusion-recovery"],
+        default="auto",
+        help="LTX-2.5 motion trajectory profile (steady-workspace: DEV 40-step focus; occlusion-recovery: Distilled focus)",
+    )
     parser.add_argument("--duration", "-d", type=int, default=5, help="Clip duration in seconds (default: 5)")
     parser.add_argument("--resolution", "-r", help="Resolution (e.g. 720p, 1080p, 2k)")
     parser.add_argument("--aspect-ratio", help="Aspect ratio (e.g. 16:9, 9:16)")
@@ -389,6 +401,11 @@ def main() -> int:
             f"     uv run tools/video_generate.py --provider direct --model wan3_0 --ref-video {active_result} --confirm\n"
             f"     oder via Higgsfield:\n"
             f"     uv run tools/video_generate.py --provider higgsfield --model minimax_h3 --ref-video {active_result} --confirm\n"
+            f"----------------------------------------------------------\n"
+            f"KINEMATISCHE DRAFT- & MASTERING-RICHTLINIE (LTX 2.5 SOTA):\n"
+            f"• Ruhige Interaktion / Feinarbeit: DEV-Pfad (40 Steps, CFG 3.5, stabilerer Workspace)\n"
+            f"• Dynamische Szene / Verdeckung: Distilled-Pfad (8-12 Steps, überlegene Re-Identifikation)\n"
+            f"• HDR-Finishing: LTX-2.5 SDR-to-HDR IC-LoRA (streaming encode ON, ACEScg -> 10-Bit HLG BT.2020)\n"
             f"==========================================================\n",
             file=sys.stderr,
         )

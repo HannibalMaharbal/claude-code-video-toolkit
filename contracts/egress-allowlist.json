@@ -94,6 +94,21 @@
       "path": "tools/youtube_upload.py",
       "pattern": "googleapiclient",
       "reason": "YouTube-API-Client; alle Auth-/API-/Upload-Einstiege erhalten den Egress-Guard."
+    },
+    {
+      "path": "tools/gemini_tts.py",
+      "pattern": "urllib_send",
+      "reason": "Gemini 3.8 Flash TTS Client; API-Aufruf an generativelanguage.googleapis.com, API-Key-geschuetzt."
+    },
+    {
+      "path": "tools/subtitle_translate.py",
+      "pattern": "urllib_send",
+      "reason": "Untertitel-Uebersetzung; nur statisch erfasste API-Verbindung."
+    },
+    {
+      "path": "tools/remotion_social.py",
+      "pattern": "social_api",
+      "reason": "Remotion Social-Plattformprofile und Seitenverhaeltnisse, keine Plattform-API-Ausfuehrung."
     }
   ]
 }
