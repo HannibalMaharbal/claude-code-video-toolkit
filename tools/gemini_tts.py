@@ -64,6 +64,16 @@ MODELS = {
     "gemini-3.8-flash-lite-tts": "Fast, cost-efficient (default) — high-throughput production",
 }
 
+# The 5 primary production styles tested for Gemini 3.8 Flash TTS.
+# Supports embedded inline expression tags: [laugh], [sigh], [breath], [whisper], [pause].
+MODES = {
+    "friendly": "warm, friendly, and approachable conversational tone",
+    "narration": "clear, engaging documentary storytelling with measured pacing",
+    "promote": "high-energy, persuasive commercial announcement style",
+    "podcast": "natural, relaxed, dynamic podcast co-host delivery",
+    "whisper": "soft, intimate, suspenseful whispering tone",
+}
+
 
 def _get_api_key() -> str:
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -86,6 +96,7 @@ def generate_audio(
     output_path: str,
     voice: str = DEFAULT_VOICE,
     style: str | None = None,
+    mode: str | None = None,
     model: str = DEFAULT_MODEL,
     verbose: bool = True,
 ) -> dict:
@@ -93,6 +104,14 @@ def generate_audio(
     if model not in MODELS:
         print(f"Warning: Unknown model '{model}', using '{DEFAULT_MODEL}'", file=sys.stderr)
         model = DEFAULT_MODEL
+
+    if mode:
+        mode_lower = mode.lower()
+        if mode_lower in MODES:
+            mode_desc = MODES[mode_lower]
+            style = f"{mode_desc}. {style}" if style else mode_desc
+        else:
+            print(f"Warning: Unknown mode '{mode}', valid modes: {list(MODES.keys())}", file=sys.stderr)
 
     api_key = _get_api_key()
 
@@ -196,16 +215,21 @@ def main():
         epilog="""
 Examples:
   python tools/gemini_tts.py --text "Hallo Welt" --output hallo.wav
-  python tools/gemini_tts.py --text "Hallo Welt" --style "cheerful and friendly" --output out.wav
+  python tools/gemini_tts.py --text "Hallo Welt" --mode narration --output out.wav
+  python tools/gemini_tts.py --text "Das ist ja unglaublich! [laugh] Absolut genial." --mode friendly --output out.wav
   python tools/gemini_tts.py --text "..." --model gemini-3.8-flash-tts --voice Puck --output out.wav
   python tools/gemini_tts.py --list-voices
         """,
     )
-    parser.add_argument("--text", "-t", type=str, help="Text to synthesize")
+    parser.add_argument("--text", "-t", type=str, help="Text to synthesize (supports tags: [laugh], [sigh], [breath], [whisper], [pause])")
     parser.add_argument("--output", "-o", type=str, help="Output audio file (.wav or .mp3)")
     parser.add_argument(
         "--voice", "-v", type=str, default=DEFAULT_VOICE,
         help=f"Voice name (default: {DEFAULT_VOICE}). Use --list-voices to see all.",
+    )
+    parser.add_argument(
+        "--mode", "-m", type=str, choices=list(MODES.keys()),
+        help=f"Production delivery preset: friendly, narration, promote, podcast, whisper",
     )
     parser.add_argument(
         "--style", type=str,
@@ -251,6 +275,7 @@ Examples:
         output_path=args.output,
         voice=args.voice,
         style=args.style,
+        mode=args.mode,
         model=args.model,
         verbose=not args.json,
     )
