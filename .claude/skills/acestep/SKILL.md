@@ -8,7 +8,7 @@ description: AI music generation with ACE-Step 1.5 — background music, vocal t
 > **DEPRECATED FROM ACTIVE ROUTING** (Kosten-/Accountstatus UNKNOWN) — nicht
 > gelöscht, historische Dokumentation unverändert. **Nicht automatisch ausführen.**
 > Zwingend: Claude Router → Video-Governance-Gate (Kosten, Lizenz, Datenschutz,
-> Account, Credits) → ausdrückliche Constantin-Freigabe. Reaktivierung nur nach
+> Account, Credits) → ausdrückliche Hannibal-Freigabe. Reaktivierung nur nach
 > erneuter Prüfung (Routing §14.14). Aktive Alternative: lokal — lizenzgeprüfte
 > Bestands-Audios via FFmpeg; kein aktiver Musikgenerierungsweg.
 
@@ -348,7 +348,7 @@ For consistent sound across a project: fix the seed (`--seed 42`) and vary only 
 - **BPM range**: 30-300
 
 ### When NOT to use ACE-Step
-- **Voice cloning** — use Qwen3-TTS or ElevenLabs instead
-- **Sound effects** — use ElevenLabs SFX (`tools/sfx.py`)
+- **Voice cloning** — use local Qwen3-TTS after setup and with explicit consent
+- **Sound effects** — use licensed local assets and FFmpeg
 - **Speech/narration** — use voiceover tools, not music gen
 - **Stem extraction from video** — extract audio first with FFmpeg, then use `--extract`

@@ -57,9 +57,7 @@ def check_against_profile(output_path: Path, profile: dict[str, Any]) -> list[di
     width, height = metadata.get("width"), metadata.get("height")
     target = profile["resolution"]
     if (width, height) != (target["width"], target["height"]):
-        problems.append(
-            f"Auflösung {width}x{height} != Ziel {target['width']}x{target['height']}"
-        )
+        problems.append(f"Auflösung {width}x{height} != Ziel {target['width']}x{target['height']}")
     codec = metadata.get("video_codec")
     if profile["codec"] and codec != profile["codec"]:
         problems.append(f"Codec {codec} != Ziel {profile['codec']}")
@@ -104,6 +102,7 @@ def make_variant(
     allow_center_crop_reason: str | None = None,
     burn_subtitles_path: Path | None = None,
     subtitle_style: dict[str, Any] | None = None,
+    scene_layout_path: Path | None = None,
 ) -> dict[str, Any]:
     """Reframe, normalize loudness, encode, thumbnail, register, and technically QC."""
     profile = platform_profiles.get_profile(profile_name)
@@ -122,22 +121,34 @@ def make_variant(
     with tempfile.TemporaryDirectory(prefix="platform-export-") as work_dir:
         work = Path(work_dir)
         reframed_path = work / "reframed.mp4"
-        reframe_result = reframe.render(
-            master_path,
-            profile_name,
-            reframed_path,
-            focus_spec_path=focus_spec_path,
-            allow_center_crop=allow_center_crop,
-            allow_center_crop_reason=allow_center_crop_reason,
-        )
+        if scene_layout_path is not None:
+            from tools.format_render import render
+
+            resolved = render(master_path, scene_layout_path, profile_name, reframed_path)
+            reframe_result: dict[str, Any] = {"warnings": [], "layout": resolved}
+        else:
+            reframe_result = reframe.render(
+                master_path,
+                profile_name,
+                reframed_path,
+                focus_spec_path=focus_spec_path,
+                allow_center_crop=allow_center_crop,
+                allow_center_crop_reason=allow_center_crop_reason,
+            )
 
         normalized_path = work / "normalized.mp4"
         if loudness_target is not None:
             _run(
                 [
-                    "ffmpeg", "-y", "-i", str(reframed_path),
-                    "-af", f"loudnorm=I={loudness_target}:TP=-1.5:LRA=11",
-                    "-c:v", "copy", str(normalized_path),
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(reframed_path),
+                    "-af",
+                    f"loudnorm=I={loudness_target}:TP=-1.5:LRA=11",
+                    "-c:v",
+                    "copy",
+                    str(normalized_path),
                 ]
             )
         else:
@@ -147,7 +158,12 @@ def make_variant(
             from tools.subtitle_burn import burn_in
 
             burned_path = work / "burned.mp4"
-            burn_in(normalized_path, burn_subtitles_path, burned_path, style=subtitle_style or {})
+            style = dict(subtitle_style or {})
+            if scene_layout_path is not None:
+                from tools.format_layout import safe_area
+
+                style.setdefault("safe_area", safe_area(profile))
+            burn_in(normalized_path, burn_subtitles_path, burned_path, style=style)
             pre_encode_path = burned_path
         else:
             pre_encode_path = normalized_path
@@ -155,8 +171,18 @@ def make_variant(
         output_path = work / f"variant.{container}"
         _run(
             [
-                "ffmpeg", "-y", "-i", str(pre_encode_path),
-                "-r", str(fps), "-c:v", codec, "-pix_fmt", "yuv420p", "-c:a", "aac",
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(pre_encode_path),
+                "-r",
+                str(fps),
+                "-c:v",
+                codec,
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
                 str(output_path),
             ]
         )
@@ -171,6 +197,9 @@ def make_variant(
         if focus_spec_path is not None:
             spec_record = asset_record.register_asset(focus_spec_path, role="EDITABLE_SOURCE")
             parents.append(str(spec_record["asset_id"]))
+        if scene_layout_path is not None:
+            layout_record = asset_record.register_asset(scene_layout_path, role="EDITABLE_SOURCE")
+            parents.append(str(layout_record["asset_id"]))
         if burn_subtitles_path is not None:
             srt_record = asset_record.register_asset(burn_subtitles_path)
             parents.append(str(srt_record["asset_id"]))
@@ -194,6 +223,18 @@ def make_variant(
             )
 
         checks = check_against_profile(output_path, profile)
+        if scene_layout_path is not None:
+            from tools.visual_qc import check as visual_check
+
+            named_profile = {**profile, "name": profile_name}
+            checks.extend(
+                visual_check(
+                    output_path,
+                    named_profile,
+                    scene_layout=scene_layout_path,
+                    subtitles=burn_subtitles_path,
+                )
+            )
         verdict = qc_pipeline.write_verdict(project_id, str(variant_record["asset_id"]), checks)
 
         project_init.add_asset_id(project_id, master_asset_id)
@@ -225,6 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
     make_cmd.add_argument("--reason")
     make_cmd.add_argument("--burn-subtitles", type=Path)
     make_cmd.add_argument("--style", type=Path, help="Subtitle style JSON.")
+    make_cmd.add_argument("--scene-layout", type=Path, help="Format-adaptive scene layout JSON.")
     return parser
 
 
@@ -241,6 +283,7 @@ def main() -> int:
             allow_center_crop_reason=args.reason,
             burn_subtitles_path=args.burn_subtitles,
             subtitle_style=style,
+            scene_layout_path=args.scene_layout,
         )
     except (PlatformExportError, platform_profiles.PlatformProfileError) as error:
         print(f"Platform-Export: ERROR — {error}", file=sys.stderr)

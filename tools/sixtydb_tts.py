@@ -2,7 +2,7 @@
 """
 Generate speech using 60db (https://60db.ai) — a premium cloud TTS provider.
 
-This is the 60db counterpart to ElevenLabs (`voiceover.py`) and Qwen3-TTS
+This is the cloud-provider counterpart to the toolkit's local voice routes
 (`qwen3_tts.py`). It exposes a `generate_audio()` function used by
 `voiceover.py` (as `--provider 60db`) and `redub.py`, plus a standalone CLI.
 
@@ -16,7 +16,7 @@ Three transports are supported (all produce a finished audio file):
   - websocket:            wss://api.60db.ai/ws/tts (realtime context protocol;
         not required for batch voiceover — needs `pip install websocket-client`)
 
-Voice settings use a UNIFIED 0-1 scale (same as ElevenLabs in this toolkit).
+Voice settings use a unified 0-1 scale.
 They are converted to 60db's native 0-100 scale internally.
 
 Usage:

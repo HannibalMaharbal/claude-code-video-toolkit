@@ -49,6 +49,13 @@ def ensure_clean_dir(path: Path, force: bool, dry_run: bool) -> None:
         path.mkdir(parents=True, exist_ok=True)
 
 
+def write_text(path: Path, content: str, dry_run: bool) -> None:
+    if dry_run:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def copy_tree(src: Path, dest: Path, force: bool, dry_run: bool) -> None:
     ensure_clean_dir(dest, force=force, dry_run=dry_run)
     if not dry_run:

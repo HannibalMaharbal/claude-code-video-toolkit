@@ -81,6 +81,14 @@
       "cost_class": "FREE",
       "requires_approval": false
     },
+    "qc_vision": {
+      "primary": "vision_qc",
+      "secondary": "ollama_vision",
+      "fallback": "manual",
+      "locality": "local",
+      "cost_class": "LIMITED",
+      "requires_approval": true
+    },
     "semantic_analysis": {
       "primary": "manual",
       "secondary": "none",

@@ -22,6 +22,7 @@ export type SubtitleStyle = {
   position: 'top' | 'center' | 'bottom';
   offsetPx: number;
   backgroundBox: BackgroundBox | null;
+  safeArea: {x: number; y: number; width: number; height: number} | null;
 };
 
 export type SubtitleBurnProps = {
@@ -52,6 +53,7 @@ export const subtitleBurnDefaultProps: SubtitleBurnProps = {
     position: 'bottom',
     offsetPx: 64,
     backgroundBox: null,
+    safeArea: null,
   },
 };
 
@@ -80,6 +82,7 @@ const CueOverlay: React.FC<{text: string; style: SubtitleStyle; fontFamily: stri
         borderRadius: 6,
       }
     : {};
+  const safeArea = style.safeArea;
   return (
     <AbsoluteFill
       style={{
@@ -87,9 +90,15 @@ const CueOverlay: React.FC<{text: string; style: SubtitleStyle; fontFamily: stri
         alignItems: 'center',
         paddingTop: style.position === 'top' ? style.offsetPx : 0,
         paddingBottom: style.position === 'bottom' ? style.offsetPx : 0,
+        left: safeArea?.x ?? 0,
+        top: safeArea?.y ?? 0,
+        right: safeArea ? undefined : 0,
+        bottom: safeArea ? undefined : 0,
+        width: safeArea?.width,
+        height: safeArea?.height,
       }}
     >
-      <div style={{...boxStyle, maxWidth: '90%'}}>
+      <div style={{...boxStyle, maxWidth: '100%'}}>
         <div style={textStyle}>{text}</div>
       </div>
     </AbsoluteFill>

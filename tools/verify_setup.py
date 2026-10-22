@@ -223,8 +223,6 @@ def check_runpod_env_vars() -> list[dict]:
 
 def check_voice() -> dict:
     """Check voice/TTS configuration."""
-    elevenlabs_key = os.getenv("ELEVENLABS_API_KEY")
-
     # Qwen3-TTS is "configured" if its endpoint exists (either Modal or RunPod)
     qwen3_modal = os.getenv("MODAL_QWEN3_TTS_ENDPOINT_URL")
     qwen3_runpod = os.getenv("RUNPOD_QWEN3_TTS_ENDPOINT_ID")
@@ -232,7 +230,6 @@ def check_voice() -> dict:
 
     return {
         "qwen3_tts": {"ok": qwen3_ok, "detail": "Modal" if qwen3_modal else ("RunPod" if qwen3_runpod else "not configured")},
-        "elevenlabs": {"ok": bool(elevenlabs_key), "detail": "configured" if elevenlabs_key else "not configured (optional)"},
     }
 
 
@@ -346,7 +343,6 @@ def main():
     if verbose:
         print("Voice:")
         print(f"  {'[x]' if voice['qwen3_tts']['ok'] else '[ ]'} Qwen3-TTS: {voice['qwen3_tts']['detail']}")
-        print(f"  {'[x]' if voice['elevenlabs']['ok'] else '[ ]'} ElevenLabs: {voice['elevenlabs']['detail']}")
         print()
 
     # 6. Smoke tests (optional)
@@ -382,7 +378,7 @@ def main():
     all_ok = all(p["ok"] for p in prereqs if p["required"])
     cloud_ok = modal_configured > 0 or sum(1 for t in runpod_env if t["ok"]) > 1
     r2_ok = r2["ok"]
-    voice_ok = voice["qwen3_tts"]["ok"] or voice["elevenlabs"]["ok"]
+    voice_ok = voice["qwen3_tts"]["ok"]
 
     results["summary"] = {
         "prerequisites": all_ok,

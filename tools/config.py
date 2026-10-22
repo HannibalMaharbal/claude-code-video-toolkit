@@ -33,33 +33,9 @@ def load_registry() -> dict:
 def get_default_voice_provider() -> str:
     """Return the registry-owned default TTS provider."""
     provider = load_registry().get("config", {}).get("defaultVoiceProvider", "kokoro")
-    if provider not in {"elevenlabs", "qwen3", "kokoro"}:
+    if provider not in {"kokoro", "piper", "qwen3-local"}:
         raise ValueError(f"Unsupported default voice provider in registry: {provider}")
     return provider
-
-
-def get_voice_id() -> str | None:
-    """Get the default voice ID from env var, falling back to registry."""
-    from dotenv import load_dotenv
-
-    load_dotenv()
-
-    # First check environment variable
-    voice_id = os.getenv("ELEVENLABS_VOICE_ID")
-    if voice_id and voice_id != "your_voice_id_here":
-        return voice_id
-
-    # Fall back to registry
-    registry = load_registry()
-    return registry.get("config", {}).get("voiceId")
-
-
-def get_elevenlabs_api_key() -> str | None:
-    """Get ElevenLabs API key from environment."""
-    from dotenv import load_dotenv
-
-    load_dotenv()
-    return os.getenv("ELEVENLABS_API_KEY")
 
 
 def get_sixtydb_api_key() -> str | None:

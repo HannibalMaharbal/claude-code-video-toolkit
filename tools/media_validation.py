@@ -82,6 +82,7 @@ def validate_audio(path: Path, max_silence_seconds: float = 5.0) -> MediaReport:
         ]
     )
     integrated = re.findall(r"I:\s*(-?\d+(?:\.\d+)?) LUFS", analysis.stderr)
+    peaks = re.findall(r"Peak:\s*(-?\d+(?:\.\d+)?) dBFS", analysis.stderr)
     silences = [
         float(value)
         for value in re.findall(r"silence_duration:\s*(\d+(?:\.\d+)?)", analysis.stderr)
@@ -94,6 +95,9 @@ def validate_audio(path: Path, max_silence_seconds: float = 5.0) -> MediaReport:
     longest_silence = max(silences, default=0.0)
     if longest_silence > max_silence_seconds:
         raise MediaValidationError(f"Zu lange Stille: {longest_silence}s")
+    true_peak = float(peaks[-1]) if peaks else None
+    if true_peak is not None and true_peak >= 0:
+        raise MediaValidationError(f"Clipping erkannt: Peak {true_peak} dBFS")
     return MediaReport(
         "audio",
         _duration(probe),
@@ -103,6 +107,7 @@ def validate_audio(path: Path, max_silence_seconds: float = 5.0) -> MediaReport:
             "channels": channels,
             "loudnessLufs": loudness,
             "longestSilenceSeconds": longest_silence,
+            "truePeakDbfs": true_peak if true_peak is not None else "unavailable",
         },
     )
 
@@ -125,14 +130,40 @@ def validate_video(path: Path) -> MediaReport:
     if width <= 0 or height <= 0 or frame_rate <= 0:
         raise MediaValidationError("Ungültige Auflösung oder Framerate")
     _run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-f", "null", "-"])
-    _run([
-        "ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-frames:v", "1",
-        "-f", "null", "-",
-    ])
-    _run([
-        "ffmpeg", "-v", "error", "-sseof", "-0.01", "-i", str(path), "-map", "0:v:0",
-        "-frames:v", "1", "-f", "null", "-",
-    ])
+    _run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(path),
+            "-map",
+            "0:v:0",
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+    )
+    _run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-sseof",
+            "-0.01",
+            "-i",
+            str(path),
+            "-map",
+            "0:v:0",
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ]
+    )
     return MediaReport(
         "video",
         _duration(probe),

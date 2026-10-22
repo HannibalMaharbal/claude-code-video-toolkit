@@ -19,13 +19,6 @@
       "created": "2025-12-04",
       "updated": "2026-02-19"
     },
-    "elevenlabs": {
-      "path": ".claude/skills/elevenlabs/",
-      "description": "ElevenLabs audio - TTS, voice cloning, music, SFX",
-      "status": "stable",
-      "created": "2025-12-04",
-      "updated": "2025-12-04"
-    },
     "ffmpeg": {
       "path": ".claude/skills/ffmpeg/",
       "description": "FFmpeg video/audio processing for Remotion assets",
@@ -123,7 +116,7 @@
     },
     "generate-voiceover": {
       "path": ".claude/commands/generate-voiceover.md",
-      "description": "Generate TTS voiceover using ElevenLabs or Qwen3-TTS",
+      "description": "Generate TTS voiceover using local Kokoro, Piper, or consent-gated Qwen3-TTS",
       "status": "stable",
       "created": "2025-12-08",
       "updated": "2026-02-19"
@@ -181,19 +174,34 @@
   "tools": {
     "voiceover": {
       "path": "tools/voiceover.py",
-      "description": "Generate TTS voiceovers using ElevenLabs or Qwen3-TTS",
+      "description": "Generate TTS voiceovers via local Kokoro, Piper, consent-gated Qwen3-TTS, or explicitly confirmed Azure Arabic TTS (--provider)",
       "usage": "python tools/voiceover.py --script SCRIPT.md --output out.mp3",
       "status": "stable",
       "created": "2025-12-08",
-      "updated": "2026-02-19"
+      "updated": "2026-10-10"
     },
-    "music": {
-      "path": "tools/music.py",
-      "description": "Generate background music using ElevenLabs",
-      "usage": "python tools/music.py --prompt 'description' --duration 120 --output music.mp3",
+    "azure_tts": {
+      "path": "tools/azure_tts.py",
+      "description": "Azure Speech neural TTS for Tunisian, Algerian, Moroccan, Lebanese, Syrian, Egyptian Arabic, plus an explicitly labeled Saudi-voice approximation for MSA",
+      "usage": "AZURE_SPEECH_KEY=... AZURE_SPEECH_REGION=... uv run tools/voiceover.py --provider azure --azure-locale ar-TN --confirm-cloud --script SCRIPT.md --output voiceover.mp3",
+      "status": "implemented; Azure resource credentials required; no live request verified",
+      "category": "audio",
+      "backend": "cloud (Azure Speech real-time TTS REST API)",
+      "env_vars": ["AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION"],
+      "options": {
+        "--azure-locale": "ar-TN, ar-DZ, ar-MA, ar-LB, ar-SY, ar-EG, or ar-msa (Saudi voice approximation)",
+        "--azure-gender": "female (default) or male",
+        "--confirm-cloud": "Required on every live run; sends script text to Microsoft and acknowledges possible charges beyond the free quota"
+      },
+      "created": "2026-10-10"
+    },
+    "local_voice": {
+      "path": "tools/local_voice.py",
+      "description": "Lokales Qwen3-TTS Voice Cloning; benötigt lokales Modell und ausdrückliche Einwilligung",
+      "usage": "uv run --extra local-voice tools/local_voice.py --text 'Text' --ref-audio reference.wav --ref-text 'Transkript' --output output.wav --consent-confirmed",
       "status": "stable",
-      "created": "2025-12-08",
-      "updated": "2025-12-08"
+      "created": "2026-09-28",
+      "updated": "2026-09-28"
     },
     "music_gen": {
       "path": "tools/music_gen.py",
@@ -247,26 +255,18 @@
         "MODAL_MUSIC_GEN_ENDPOINT_URL"
       ]
     },
-    "sfx": {
-      "path": "tools/sfx.py",
-      "description": "Generate sound effects using ElevenLabs",
-      "usage": "python tools/sfx.py --preset whoosh --output sfx.mp3",
-      "status": "stable",
-      "created": "2025-12-08",
-      "updated": "2025-12-08"
-    },
     "redub": {
       "path": "tools/redub.py",
-      "description": "Redub video with different voice (extract audio, transcribe, TTS, replace)",
-      "usage": "python tools/redub.py --input video.mp4 --voice-id VOICE_ID --output dubbed.mp4",
+      "description": "Local dubbing with MLX Whisper, Argos, and consent-gated Qwen3-TTS",
+      "usage": "uv run --extra local-voice tools/redub.py --input video.mp4 --ref-audio reference.wav --ref-text 'Exact transcript' --output dubbed.mp4 --consent-confirmed",
       "status": "beta",
       "created": "2025-12-28",
       "updated": "2025-12-28"
     },
     "addmusic": {
       "path": "tools/addmusic.py",
-      "description": "Add background music to video (generate via ElevenLabs or use existing file)",
-      "usage": "python tools/addmusic.py --input video.mp4 --prompt 'Subtle corporate' --output output.mp4",
+      "description": "Add an existing local music file to video",
+      "usage": "python tools/addmusic.py --input video.mp4 --music music.mp3 --output output.mp4",
       "status": "beta",
       "created": "2025-12-28",
       "updated": "2025-12-28"
@@ -572,6 +572,31 @@
         "RUNPOD_FLUX2_ENDPOINT_ID"
       ]
     },
+    "z_image": {
+      "path": "tools/z_image.py",
+      "description": "Free local image generation using Z-Image Turbo via MLX-Gen (Apple Silicon) \u2014 no API key, no cloud cost",
+      "usage": "python tools/z_image.py --prompt \"A puffin on a cliff\" --output puffin.png",
+      "status": "active",
+      "category": "image-generation",
+      "backend": "mlxgen (AbstractFramework/z-image-turbo-4bit, cached locally)",
+      "env_vars": [],
+      "options": {
+        "--width": "Image width (default: 1024)",
+        "--height": "Image height (default: 1024)",
+        "--steps": "Diffusion steps (default: 4, Turbo works well at 4-8)",
+        "--seed": "Random seed for reproducibility"
+      },
+      "verified": "Test generation confirmed working 2026-09-26 before activation",
+      "created": "2026-09-26"
+    },
+    "qwen_image": {
+      "path": null,
+      "description": "Planned local image generation option (Qwen-Image via mlxgen). Not implemented \u2014 model not downloaded, no adapter written.",
+      "status": "planned",
+      "category": "image-generation",
+      "backend": "mlxgen (Qwen/Qwen-Image \u2014 not downloaded)",
+      "note": "No automatic install/download triggered. Requires explicit approval before `mlxgen download --model Qwen/Qwen-Image` and an adapter script."
+    },
     "ltx2": {
       "path": "tools/ltx2.py",
       "description": "AI video generation using LTX-2.3 22B - text-to-video, image-to-video clips with synchronized audio",
@@ -614,14 +639,92 @@
         "MODAL_LTX2_ENDPOINT_URL"
       ]
     },
+    "ltx2_local": {
+      "path": "tools/ltx25_mlx_adapter.py",
+      "description": "Free local video generation with synchronized audio using LTX-2.5-MLX (Apple Silicon) — no API key, no cloud cost, no Modal dependency",
+      "usage": "python tools/ltx25_mlx_adapter.py --prompt \"A sunset over the ocean\" --output sunset.mp4",
+      "status": "active",
+      "category": "video-generation",
+      "backend": "ltx-2-mlx runtime (github.com/MrMoferFRAN/ltx-2-mlx, branch ltx25, pinned commit 57952288) + MrMofer/ltx-2.5-mlx-q8 weights, cached locally in ~/AI-Modelle/ltx-2-mlx and ~/.cache/huggingface/hub",
+      "env_vars": [],
+      "options": {
+        "--mode": "distilled (default, fastest) | two-stage | two-stages-hq | one-stage",
+        "--height/--width": "default 480x704, must be divisible by 32",
+        "--frames": "default 97 (4.0s @ 24fps), must be 8k+1",
+        "--seed": "Random seed for reproducibility",
+        "--image": "Reference image for I2V",
+        "--continue-from": "Continue a previous clip by extracting its final frame as the next I2V anchor; mutually exclusive with --image",
+        "--no-low-ram": "Disable block streaming (needs ~72GB RAM without it; 24GB Macs require --low-ram, the default)"
+      },
+      "verified": "Live test generation confirmed working 2026-09-26: 704x448, 97 frames, --distilled --low-ram on M4 Pro 24GB RAM, 190.7s render time. Audio track contains real synchronized speech — MLX Whisper transcribed the target German phrase back out at 94-97% word confidence. Known limitation: camera-facing / \"looks into camera\" framing instructions are not reliably honored — review output frames before relying on visible lip-sync.",
+      "created": "2026-09-26"
+    },
+    "ltx25_layout_to_render": {
+      "path": null,
+      "description": "Planned local LTX-2.5 IC-LoRA workflow guided by a 3D blocking/reference video for camera, composition, and motion control",
+      "status": "planned; blocked until local weights, license review, MLX compatibility test, and visual continuity acceptance",
+      "category": "video-vfx",
+      "backend": "candidate: local ltx-2-mlx IC-LoRA",
+      "env_vars": [],
+      "activation_gate": [
+        "Review the exact model license and access terms",
+        "Obtain explicit approval before any model download or account authentication",
+        "Verify the LoRA loads through the pinned MLX runtime without network fallback",
+        "Run a Blender blocking to LTX render test and compare camera path, framing, pose, and timing frame by frame",
+        "Keep disabled if geometry or temporal alignment drifts beyond production tolerance"
+      ],
+      "verified": "Official LTX VFX capability confirmed; not installed or live-tested in this workspace",
+      "created": "2026-10-20"
+    },
+    "ltx25_alpha_gen": {
+      "path": null,
+      "description": "Planned local LTX-2.5 Alpha Gen IC-LoRA that converts an RGB video into a frame-aligned grayscale alpha matte for compositing",
+      "status": "blocked; gated model absent, license/privacy acceptance required, pinned MLX native-resolution compatibility unverified",
+      "category": "video-vfx",
+      "backend": "candidate: local ltx-2-mlx IC-LoRA; do not route through the normal MP4 generator",
+      "env_vars": [],
+      "limits": {
+        "max_frames": 145,
+        "max_resolution": "1920x1088",
+        "foreground_selection": "automatic; no prompt or mask selection",
+        "output": "grayscale matte; composite separately with the source RGB video"
+      },
+      "activation_gate": [
+        "Hannibal approves Hugging Face authentication and the LTX-2.x community license/privacy terms",
+        "Confirm sufficient local storage before downloading the gated LoRA",
+        "Prove native-resolution, frame-count, and timestamp parity in the pinned MLX runtime",
+        "Validate hair, smoke, glass, motion blur, edge chatter, and temporal stability on non-sensitive test footage",
+        "Export and inspect a DaVinci-compatible matte before production routing"
+      ],
+      "verified": "Official model card confirmed; model not present locally and no live inference performed",
+      "created": "2026-10-20"
+    },
+    "higgsfield_video": {
+      "path": "tools/higgsfield_video.py",
+      "description": "AI video generation via the installed Higgsfield CLI (cloud, paid) \u2014 always shows credit cost + account balance before spending; generation requires --confirm",
+      "usage": "python tools/higgsfield_video.py --prompt \"...\" --output clip.mp4  # cost preview only; add --confirm to generate",
+      "status": "active",
+      "category": "video-generation",
+      "backend": "higgsfield-cli",
+      "requires": "higgsfield CLI installed + logged in (already set up)",
+      "env_vars": [],
+      "options": {
+        "--model": "Higgsfield video job_type (default: seedance_2_0_mini, cost-efficient)",
+        "--image": "Reference image for image-to-video",
+        "--confirm": "Required to actually spend credits and create the job",
+        "--list-models": "List available Higgsfield video models"
+      },
+      "costGating": "Shows `higgsfield generate cost` estimate + account balance by default; no job is created without --confirm",
+      "created": "2026-09-26"
+    },
     "chain_video": {
       "path": "tools/chain_video.py",
-      "description": "Chain LTX-2 clips with visual continuity \u2014 each scene uses the last frame of the previous as input",
+      "description": "Chain local LTX-2.5-MLX clips with visual continuity; follow-up scenes use the adapter's --continue-from end-frame anchor",
       "usage": "python tools/chain_video.py --scenes-dir images/ --output-dir videos/ --prompt \"Cinematic flow\"",
       "status": "beta",
       "category": "video-generation",
-      "backend": "ltx-2.3-22b (via ltx2.py)",
-      "requires": "Modal account (same as ltx2)",
+      "backend": "local ltx-2.5-mlx via tools/ltx25_mlx_adapter.py",
+      "requires": "Local protected LTX-2.5-MLX runtime and weights",
       "options": {
         "inputModes": [
           "scenes-dir (numbered images)",
@@ -635,12 +738,10 @@
         ],
         "prefix": "chain (default)"
       },
-      "envVars": [
-        "MODAL_LTX2_ENDPOINT_URL"
-      ],
-      "estimatedCost": "$0.20-0.25 per scene (delegates to ltx2)",
+      "envVars": [],
+      "estimatedCost": "$0 cloud cost; local compute only",
       "created": "2026-04-04",
-      "updated": "2026-04-04"
+      "updated": "2026-10-20"
     },
     "transcribe": {
       "description": "Free local audio/video transcription plus SRT/VTT generation and deterministic subtitle QC using mlx-whisper (Apple Silicon optimized)",
@@ -716,6 +817,56 @@
         "--speed": "Speech speed multiplier (default: 1.0)",
         "--list-voices": "List all 28 available voices with descriptions"
       }
+    },
+    "piper_tts": {
+      "path": "tools/piper_tts.py",
+      "description": "Free local German TTS using Piper (Thorsten high-quality voice) \u2014 no API key, no cold start",
+      "usage": "python tools/piper_tts.py --text \"Hallo Welt\" --output hallo.mp3",
+      "status": "active",
+      "category": "audio",
+      "backend": "local",
+      "env_vars": [],
+      "options": {
+        "--voice": "Voice name (default: thorsten). German only for now.",
+        "--speed": "Speech speed multiplier (default: 1.0)",
+        "--list-voices": "List available voices"
+      },
+      "created": "2026-09-26"
+    },
+    "gemini_tts": {
+      "path": "tools/gemini_tts.py",
+      "description": "Gemini 3.8 Flash / Flash-Lite TTS (Google, cloud API) — NOT local, NOT free (has a rate-limited free tier; free-tier content is used by Google to improve its products). Noticeably higher quality than Piper: natural prosody, emotional style annotations, 130+ languages.",
+      "usage": "python tools/gemini_tts.py --text \"Hallo Welt\" --output hallo.wav",
+      "status": "active",
+      "category": "audio",
+      "backend": "cloud (generativelanguage.googleapis.com, gemini-3.8-flash-tts / gemini-3.8-flash-lite-tts)",
+      "env_vars": ["GEMINI_API_KEY"],
+      "options": {
+        "--voice": "Voice name (default: Kore). See --list-voices.",
+        "--style": "Emotional/delivery style annotation, e.g. 'cheerful and friendly'",
+        "--model": "gemini-3.8-flash-tts (best quality) or gemini-3.8-flash-lite-tts (default, cheaper)",
+        "--list-voices": "List available voices and models"
+      },
+      "verified": "Live test 2026-09-26: German phrase round-tripped through MLX Whisper at 92-99% word confidence. Also wired into tools/voiceover.py as --provider gemini (single-file, dry-run, and scene-dir modes all tested).",
+      "created": "2026-09-26"
+    },
+    "subtitle_translate": {
+      "path": "tools/subtitle_translate.py",
+      "description": "Translate SRT/VTT subtitles. Default engine argos is local, offline, free forever, and requires no account; live-verified de<->en including a network-blocked run. Gemini (cloud, gemini-3.8-flash) is available only by explicit selection. --engine ollama (local, devstral-small-2:latest) is kept only for explicit comparison — NOT reliable, observed echoing the prompt template's placeholder text instead of translating.",
+      "usage": "python tools/subtitle_translate.py --input de.srt --output en.srt --target-language English",
+      "status": "active",
+      "category": "subtitles",
+      "backend": "cloud (gemini-3.8-flash) by default; local Argos Translate via --engine argos (recommended local/free option); local Ollama LLM via --engine ollama (unreliable, comparison only)",
+      "env_vars": ["GEMINI_API_KEY"],
+      "options": {
+        "--engine": "gemini (default, cloud, reliable), argos (local, free forever, verified, recommended local option), or ollama (local LLM, unreliable for this task, comparison only)",
+        "--target-language": "Target language, e.g. English",
+        "--source-language": "Source language, only used by --engine argos (default: de)",
+        "--model": "Override model for the selected engine"
+      },
+      "verified": "Live test 2026-09-26: gemini engine correctly translated German test line to English. argos engine live-verified end-to-end with a real SRT file (de->en, correct natural translation, exit 0, four repeated single-direction runs with no crash — a mixed-direction crash at Python interpreter shutdown was observed once but does not affect single-direction runs, which is how this tool always calls it). Ollama engine confirmed broken (placeholder echo + intermittent 60s+ timeout) and now fails loudly with a clear error instead of silently writing wrong subtitles. Language packages installed: de<->en via ~/.local/share/argos-translate/packages/.",
+      "created": "2026-09-20",
+      "updated": "2026-09-27"
     }
   },
   "optionalComponents": {

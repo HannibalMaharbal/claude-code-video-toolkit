@@ -77,7 +77,7 @@ def _full_pipeline(tmp_path: Path) -> dict[str, str]:
     _accept("demo-project", str(variant_record["asset_id"]))
 
     provenance_report.set_labeling(
-        "demo-project", "assessed_not_required", note="Kein KI-Inhalt", by="constantin"
+        "demo-project", "assessed_not_required", note="Kein KI-Inhalt", by="hannibal"
     )
     provenance_report.write_report("demo-project")
 
@@ -146,7 +146,7 @@ def test_create_rejects_not_assessed_labeling(env: Path, verified_ad_1x1: None) 
 
 def test_create_rejects_missing_provenance_report(env: Path, verified_ad_1x1: None) -> None:
     provenance_report.set_labeling(
-        "demo-project", "assessed_not_required", note="x", by="constantin"
+        "demo-project", "assessed_not_required", note="x", by="hannibal"
     )
     with pytest.raises(release_package.ReleasePackageError, match="Provenance"):
         release_package.create("demo-project", {"ad_1x1": "ast_" + "a" * 12})
@@ -184,7 +184,7 @@ def test_create_rejects_variant_without_accepted_verdict(env: Path, verified_ad_
     _accept("demo-project", str(master_record["asset_id"]))
     # Variant itself never gets an accepted verdict.
     provenance_report.set_labeling(
-        "demo-project", "assessed_not_required", note="x", by="constantin"
+        "demo-project", "assessed_not_required", note="x", by="hannibal"
     )
     provenance_report.write_report("demo-project")
     metadata_path = project_init.PROJECTS_ROOT / "demo-project" / "specs" / "release-metadata.json"
@@ -213,15 +213,15 @@ def test_approve_creates_approval_file(env: Path, verified_ad_1x1: None) -> None
     result = release_package.create("demo-project", {"ad_1x1": ids["variant_asset_id"]})
     package_dir = Path(result["ad_1x1"]["package_dir"])
 
-    approval = release_package.approve(package_dir, by="constantin")
+    approval = release_package.approve(package_dir, by="hannibal")
 
-    assert approval["approved_by"] == "constantin"
+    assert approval["approved_by"] == "hannibal"
     assert release_package.is_approved(package_dir) is True
 
 
 def test_approve_rejects_unknown_package(tmp_path: Path) -> None:
     with pytest.raises(release_package.ReleasePackageError, match="Kein Release-Paket"):
-        release_package.approve(tmp_path / "nowhere", by="constantin")
+        release_package.approve(tmp_path / "nowhere", by="hannibal")
 
 
 def test_approve_rejects_empty_by(env: Path, verified_ad_1x1: None) -> None:

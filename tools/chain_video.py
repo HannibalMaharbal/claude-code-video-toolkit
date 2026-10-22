@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Chain LTX-2 video clips with visual continuity.
+Chain local LTX-2.5-MLX video clips with visual continuity.
 
 Generates a sequence of video clips where each scene uses the last frame
 of the previous scene as input, creating seamless visual flow.
@@ -62,25 +62,6 @@ def progress(stage, msg, pct=None, elapsed=0.0):
     print(json.dumps(obj), file=sys.stderr, flush=True)
 
 
-def extract_last_frame(video_path, output_path):
-    """Extract the last frame of a video as PNG."""
-    cmd = [
-        "ffmpeg", "-sseof", "-0.1",
-        "-i", video_path,
-        "-frames:v", "1",
-        "-y", output_path
-    ]
-    result = subprocess.run(cmd, capture_output=True)
-    if result.returncode != 0:
-        stderr_tail = result.stderr.decode()[-200:]
-        raise RuntimeError(
-            f"ffmpeg failed extracting frame from {video_path}: {stderr_tail}"
-        )
-    if not os.path.exists(output_path):
-        raise RuntimeError(f"Frame extraction produced no output: {output_path}")
-    return output_path
-
-
 def find_scene_images(scenes_dir, start, end):
     """Find numbered scene images in a directory."""
     images = {}
@@ -101,31 +82,38 @@ def find_scene_images(scenes_dir, start, end):
     return images
 
 
-SCENE_TIMEOUT = 1200  # 20 minutes — generous buffer over ltx2's 15min cloud timeout
+SCENE_TIMEOUT = 1860  # Adapter limit is 30 minutes; allow cleanup and result handling.
 
 
-def generate_scene(input_image, prompt, output_path, cloud, extra_args, use_progress):
-    """Run ltx2.py to generate a video clip from an image."""
+def generate_scene(input_image, previous_clip, prompt, output_path, extra_args):
+    """Run the local LTX-2.5 adapter with exactly one visual start source."""
     cmd = [
-        sys.executable, os.path.join(TOOLKIT_ROOT, "tools", "ltx2.py"),
-        "--input", input_image,
+        sys.executable,
+        os.path.join(TOOLKIT_ROOT, "tools", "ltx25_mlx_adapter.py"),
         "--prompt", prompt,
         "--output", output_path,
-        "--cloud", cloud,
     ]
-    if use_progress:
-        cmd.extend(["--progress", "json"])
+    if previous_clip:
+        cmd.extend(["--continue-from", previous_clip])
+    elif input_image:
+        cmd.extend(["--image", input_image])
+    else:
+        raise RuntimeError("scene has neither a previous clip nor an input image")
     cmd.extend(extra_args)
 
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=SCENE_TIMEOUT)
     except subprocess.TimeoutExpired:
-        raise RuntimeError(f"ltx2.py timed out after {SCENE_TIMEOUT}s for {output_path}")
+        raise RuntimeError(
+            f"ltx25_mlx_adapter.py timed out after {SCENE_TIMEOUT}s for {output_path}"
+        )
     if result.returncode != 0:
         stderr_tail = result.stderr.decode(errors="replace")[-300:] if result.stderr else ""
-        raise RuntimeError(f"ltx2.py failed for {output_path}: {stderr_tail}")
+        stdout_tail = result.stdout.decode(errors="replace")[-300:] if result.stdout else ""
+        detail = stderr_tail or stdout_tail
+        raise RuntimeError(f"ltx25_mlx_adapter.py failed for {output_path}: {detail}")
     if not os.path.exists(output_path):
-        raise RuntimeError(f"ltx2.py produced no output: {output_path}")
+        raise RuntimeError(f"ltx25_mlx_adapter.py produced no output: {output_path}")
     return output_path
 
 
@@ -145,7 +133,6 @@ def main():
     )
     parser.add_argument("--start", type=int, default=1, help="First scene number (default: 1)")
     parser.add_argument("--end", type=int, default=30, help="Last scene number (default: 30)")
-    parser.add_argument("--cloud", default="modal", help="Cloud provider (default: modal)")
     parser.add_argument("--prefix", default="chain", help="Output filename prefix (default: chain)")
     parser.add_argument(
         "--progress",
@@ -218,25 +205,13 @@ def main():
         else:
             print(f"\n--- Scene {curr}/{args.end} ---")
 
-        # Determine input image
+        # Continue directly from the preceding clip. The local adapter owns
+        # end-frame extraction, cleanup and fail-fast input validation.
         input_image = None
-        if prev_clip:
-            # Chain from previous clip's last frame
-            frame_path = os.path.join(args.output_dir, f".frame-{curr}.png")
-            try:
-                extract_last_frame(prev_clip, frame_path)
-                input_image = frame_path
-            except RuntimeError as e:
-                if use_progress:
-                    progress("error", f"Frame extraction failed: {e}", elapsed=time.time() - t0)
-                else:
-                    print(f"WARNING: Frame extraction failed: {e}")
-
-        if not input_image and i in scene_images:
-            # Fall back to scene image from directory
+        if not prev_clip and i in scene_images:
             input_image = scene_images[i]
 
-        if not input_image:
+        if not prev_clip and not input_image:
             msg = f"Scene {curr}: no input image and no previous clip to chain from, skipping"
             if use_progress:
                 progress("error", msg, elapsed=time.time() - t0)
@@ -246,7 +221,7 @@ def main():
 
         # Generate
         try:
-            generate_scene(input_image, prompt, output_path, args.cloud, extra, use_progress)
+            generate_scene(input_image, prev_clip, prompt, output_path, extra)
             prev_clip = output_path
             completed += 1
             elapsed = time.time() - t0
@@ -267,13 +242,6 @@ def main():
                 print(f"ERROR: Scene {curr} failed: {e}")
             # Don't chain from a failed scene — keep prev_clip as is
             continue
-
-    # Clean up temporary frame files
-    for tmp in glob.glob(os.path.join(args.output_dir, ".frame-*.png")):
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
 
     elapsed = time.time() - t0
     if use_progress:

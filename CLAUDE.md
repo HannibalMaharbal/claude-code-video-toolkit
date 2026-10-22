@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 **Key capabilities:**
 - Programmatic video creation with Remotion (React-based)
-- AI voiceover generation with ElevenLabs or Qwen3-TTS
+- Local voiceover generation with Kokoro and Piper; local Qwen3-TTS cloning after setup
 - AI music generation with ACE-Step 1.5 (text-to-music, vocals, covers, stems)
 - Browser demo recording with Playwright
 - Asset processing with FFmpeg
@@ -88,7 +88,7 @@ Brands live in `brands/`. Each defines visual identity:
 ```
 brands/my-brand/
 ├── brand.json    # Colors, fonts, typography
-├── voice.json    # ElevenLabs voice settings
+├── voice.json    # Local voice provider settings
 └── assets/       # Logo, backgrounds
 ```
 
@@ -123,14 +123,16 @@ This is especially critical for background commands where the working directory 
 |------|-------|-------------|
 | **Project tools** | voiceover, music, music_gen, sfx, sync_timing | During video creation workflow |
 | **Utility tools** | redub, addmusic, notebooklm_brand, locate_watermark | Quick transformations on existing videos |
-| **Free local** | transcribe, kokoro_tts | Free transcription (mlx-whisper) + Free TTS (Kokoro) — Apple Silicon, no API key |
-| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | AI processing via Modal (free) or RunPod |
+| **Free local** | transcribe, kokoro_tts, piper_tts, local_voice, redub, z_image, ltx2_local, subtitle_translate (`--engine argos`) | Local transcription (mlx-whisper), TTS (Kokoro/Piper), consent-gated Qwen3-TTS cloning/dubbing, image/video generation and offline translation — Apple Silicon, no API key |
+| **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | Optional external GPU processing; provider pricing and usage limits must be checked before use. The local `local_voice`/`redub` path does not use this cloud tool. |
+| **Cloud, low-cost** | gemini_tts, subtitle_translate (default engine) | Google Gemini API — rate-limited free tier + cheap paid tier; NOT local, NOT unconditionally free |
+| **Cloud, paid** | higgsfield_video | Higgsfield CLI video generation — always cost-gated, shows credits before spending |
 
 Utility tools work on any video file without requiring a project structure.
 
 ### Voiceover Generation
 
-Default provider is **kokoro** (local, free, best quality — no API key, no cold start).
+Default provider is **kokoro** (local, no API key). **piper** is local German TTS. **qwen3-local** is available for reference-voice cloning; it requires the optional `local-voice` extra, the already cached local model, an exact reference transcript and explicit consent. Azure Arabic is an optional explicit provider and is never a fallback.
 
 ```bash
 # Per-scene generation (recommended) — Kokoro by default
@@ -141,8 +143,11 @@ python tools/voiceover.py --voice am_michael --scene-dir public/audio/scenes --j
 python tools/voiceover.py --voice af_heart --scene-dir public/audio/scenes --json
 python tools/voiceover.py --voice bm_george --speed 0.95 --scene-dir public/audio/scenes --json
 
-# Fallback: Qwen3-TTS (Modal, requires cold start)
-python tools/voiceover.py --provider qwen3 --tone warm --scene-dir public/audio/scenes --json
+# Local Qwen3-TTS voice cloning (requires a permitted reference voice)
+uv run --extra local-voice tools/voiceover.py --provider qwen3-local \
+  --script SCRIPT.md --ref-audio REFERENCE.wav \
+  --ref-text "Exact transcript of the reference" --consent-confirmed \
+  --output voiceover.wav
 
 # Single file
 python tools/voiceover.py --script SCRIPT.md --output out.mp3
@@ -169,6 +174,80 @@ python tools/transcribe.py --input video.mp4 --language de  # Force language
 
 Models: `tiny` (fast) → `small` (default) → `medium` → `large-v3` (best quality)
 
+### Subtitle Translation
+
+```bash
+python tools/subtitle_translate.py --input de.srt --output en.srt --target-language English
+```
+
+Default engine is **argos** (local, offline, no account). Gemini remains available only through explicit `--engine gemini` selection.
+
+**Argos Translate** was added 2026-09-26 as the local default — a dedicated neural translation model, not an LLM being asked to follow a prompt. Live-verified end-to-end with a real 3-line SRT file (de→en, correct natural translation, exit 0) and again on 2026-09-27 with network access blocked. Requires the language pair to be installed once (`de`/`en` already installed at `~/.local/share/argos-translate/packages/`; use `install_argos_language_pair(from_code, to_code)` in `subtitle_translate.py` for others).
+
+`--engine ollama` (local, offline, `devstral-small-2:latest`) exists only for explicit comparison — verified live to intermittently echo the prompt template's literal placeholder text instead of translating, and to occasionally not return within 60s+. It now fails loudly with a clear error in the common case instead of silently writing wrong subtitles, but is **not recommended**; use `--engine argos` instead for local/confidential translation.
+
+### Piper TTS (Standalone, local, German)
+
+Free, offline German voiceover — no API key, no cold start. Default voice is Thorsten (high quality).
+
+```bash
+python tools/piper_tts.py --text "Hallo Welt" --output hallo.mp3
+python tools/piper_tts.py --text "Hallo Welt" --speed 0.9 --output langsam.mp3
+python tools/piper_tts.py --list-voices
+```
+
+Also available as a `voiceover.py` provider:
+
+```bash
+python tools/voiceover.py --provider piper --scene-dir public/audio/scenes --json
+python tools/voiceover.py --provider piper --piper-speed 0.9 --script script.txt --output out.mp3
+```
+
+Model: `~/AI-Modelle/piper/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx`. `--speed` is a multiplier (>1 = faster), consistent with the other providers; converted internally to Piper's native `--length-scale`.
+
+### Gemini TTS (Standalone, cloud, low-cost)
+
+**Not local, not free** — a Google cloud API call, distinct from Piper/Kokoro. Noticeably higher quality: natural prosody, emotional style direction, 130+ languages with automatic detection. Has a rate-limited free tier (free-tier content is used by Google to improve its products per Google's terms) plus paid tiers beyond that — check current pricing/limits at ai.google.dev/gemini-api/docs/pricing before heavy use.
+
+```bash
+python tools/gemini_tts.py --text "Hallo Welt" --output hallo.wav
+python tools/gemini_tts.py --text "Hallo Welt" --style "cheerful and friendly" --output out.wav
+python tools/gemini_tts.py --text "..." --model gemini-3.8-flash-tts --voice Puck --output out.wav
+python tools/gemini_tts.py --list-voices
+```
+
+Also available as a `voiceover.py` provider:
+
+```bash
+python tools/voiceover.py --provider gemini --scene-dir public/audio/scenes --json
+python tools/voiceover.py --provider gemini --gemini-style "warm and friendly" --script script.txt --output out.mp3
+```
+
+Requires `GEMINI_API_KEY` in the environment (already present in `~/.secrets`, sourced by `~/.zshrc` — no per-project `.env` entry needed). Two models: `gemini-3.8-flash-tts` (flagship, richest emotional range) and `gemini-3.8-flash-lite-tts` (default, cheaper, high-throughput). Verified live 2026-09-26: a German test phrase round-tripped through MLX Whisper at 92-99% word confidence.
+
+### Azure Speech TTS (Arabic dialects, cloud, usage-billed)
+
+The optional `azure` provider in `tools/voiceover.py` supports Tunisian
+(`ar-TN`), Algerian (`ar-DZ`), Moroccan (`ar-MA`), Lebanese (`ar-LB`), Syrian
+(`ar-SY`) and Egyptian (`ar-EG`) neural voices. Azure does not list a dedicated
+Modern Standard Arabic locale; `ar-msa` is explicitly a Saudi voice reading
+formal Arabic, not a neutral MSA voice. Each supported locale offers a female
+and a male voice.
+
+Requires `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` from an Azure Speech
+resource. Each live run requires `--confirm-cloud`; it sends script text to
+Microsoft. The Azure pricing page currently lists 0.5 million neural TTS
+characters free per month; usage after the free allowance may be billed.
+The real-time TTS path returns audio without Microsoft retaining the input text
+or generated audio according to Microsoft's data-handling documentation.
+
+```bash
+uv run tools/voiceover.py --provider azure --azure-locale ar-TN \
+  --azure-gender female --confirm-cloud --script SCRIPT.md --output voiceover.mp3
+uv run tools/voiceover.py --provider azure --azure-locale ar-EG \
+  --azure-gender male --confirm-cloud --scene-dir public/audio/scenes --json
+```
+
 ### Kokoro TTS (Standalone, local)
 
 ```bash
@@ -178,11 +257,17 @@ python tools/kokoro_tts.py --text "Hello" --voice bm_george --speed 0.9 --output
 python tools/kokoro_tts.py --list-voices   # 28 voices: af_heart, am_michael, bm_george, etc.
 ```
 
+For production/video editing, prefer `.wav`: the local wrapper writes lossless
+24-bit PCM. MP3 output uses maximum-quality VBR (`libmp3lame -q:a 0`) when a
+smaller file is needed.
+
 28 voices across 4 groups: American Female (af_*), American Male (am_*), British Female (bf_*), British Male (bm_*).
 Best all-around: `af_heart` (warm female), `am_michael` (professional male, default), `bm_george` (British professional).
-First run downloads model ~500MB (cached in `~/.cache/huggingface/`). Subsequent runs are instant.
+Model artifacts are cached locally; German WAV generation was verified on 2026-09-28.
 
-### Qwen3-TTS (Standalone, Modal)
+### Qwen3-TTS (Standalone, Cloud; optional and potentially billed)
+
+This standalone `qwen3_tts.py` command uses a Modal or RunPod GPU endpoint and is separate from the local `qwen3-local` provider above. It is not needed for local TTS or local dubbing. Check the selected provider's current price and account usage before running it; do not assume a free tier.
 
 ```bash
 python tools/qwen3_tts.py --text "Hello world" --speaker Ryan --output hello.mp3
@@ -231,6 +316,70 @@ python tools/upscale.py --input photo.jpg --scale 2 --model anime --face-enhance
 ```
 
 See `docs/qwen-edit-patterns.md` and `.claude/skills/qwen-edit/` for prompting guidance.
+
+### Z-Image Turbo (Standalone, local, MLX)
+
+Free, offline text-to-image generation via `mlxgen` on Apple Silicon — no API key, no cloud cost.
+
+```bash
+python tools/z_image.py --prompt "A puffin on a cliff" --output puffin.png
+python tools/z_image.py --prompt "Product shot" --width 1024 --height 1024 --steps 9
+python tools/z_image.py --prompt "..." --seed 42 --output out.png
+```
+
+Uses the already-cached `AbstractFramework/z-image-turbo-4bit` snapshot by default, so no model download is triggered. Verified with a live test generation before being marked active in the registry (2026-09-26).
+
+**Planned, not installed:** Qwen-Image (also via `mlxgen`) is noted as a future local image option in `_internal/toolkit-registry.json` (`qwen_image`, `status: planned`). No adapter exists and no download has been triggered — `mlxgen download --model Qwen/Qwen-Image` requires explicit approval first.
+
+### LTX-2.5-MLX (Standalone, local, MLX)
+
+Free, offline text-to-video / image-to-video generation with **synchronized audio** on Apple Silicon — no API key, no cloud cost, no Modal dependency. Distinct from `ltx2.py`, which wraps the cloud-hosted LTX-2.3 22B via Modal (paid).
+
+```bash
+python tools/ltx25_mlx_adapter.py --prompt "A sunset over the ocean" --output sunset.mp4
+python tools/ltx25_mlx_adapter.py --prompt "..." --frames 49 --seed 42 --output clip.mp4
+python tools/ltx25_mlx_adapter.py --prompt "Animate this" --image photo.jpg --output animated.mp4
+python tools/ltx25_mlx_adapter.py --prompt "The action continues naturally" --continue-from previous.mp4 --output next.mp4
+
+# Generate a whole local sequence; every follow-up clip uses --continue-from automatically
+python tools/chain_video.py --scenes-dir images/ --output-dir videos/ --end 5 --prompt "The action continues naturally"
+python tools/ltx25_mlx_adapter.py --prompt "..." --mode two-stages-hq --output hq.mp4   # native HQ defaults, no TeaCache
+```
+
+Runtime: `~/PROJEKTE/AI-Modelle/ltx-2-mlx` (github.com/MrMoferFRAN/ltx-2-mlx, branch `ltx25`, pinned commit `57952288`). Weights: `~/PROJEKTE/AI-Modelle/ltx-2.5-mlx-q8`. `--low-ram` (block streaming) is on by default and mandatory at 24GB RAM — the full model needs ~72GB without it. The shared adapter automatically adds continuity, motivated camera motion, anti-flicker and reference-lock constraints. `--continue-from` decodes the exact final frame available from the preceding clip into a temporary lossless PNG and supplies it as the next clip's first-frame conditioning anchor; the temporary file is removed after the run. It cannot be combined with `--image`. Of the modes installed in this pinned MLX runtime, `two-stages-hq` is the maximum-quality choice: it keeps the native 15-step `res_2s` path and disables TeaCache. `two-stage` is the balanced accelerated choice; `distilled` remains the fastest and only live-verified default.
+
+Production capability boundaries and the evidence-based LoRA/alpha/realtime
+assessment are documented in
+`docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`. Do not describe upstream LoRA
+training, the separate Alpha-Gen/Layout-to-Render IC-LoRAs, or realtime
+generation as active features of the installed MLX adapter without a separate
+local live test.
+
+The official Lightricks LTX-2.5 stack recommends DFR for production quality, but DFR is not available in this pinned MLX runtime and the installed model pack does not contain its required detailing IC-LoRA. Do not describe the local HQ mode as equivalent to DFR, and do not update the protected runtime or download additional weights without Hannibal's explicit approval.
+
+Verified with a live test generation before being marked active in the registry (2026-09-26): 704×448, 97 frames (4.0s), `--distilled --low-ram` on M4 Pro / 24GB RAM — **190.7s render time**. The audio track carries real synchronized speech generated purely from the prompt text: MLX Whisper transcribed the target German phrase back out of the rendered clip at 94-97% word confidence.
+
+**Known limitation:** the model does not reliably honor camera-facing / "looks into the camera" framing instructions in the prompt — review the actual output frames before relying on visible lip-sync. Frame count must be `8k+1` (25, 49, 97, …); height/width must be divisible by 32.
+
+### Higgsfield Video (Cloud, paid, cost-gated)
+
+Wraps the installed and authenticated `higgsfield` CLI. **Always shows the credit cost and account balance before spending anything** — generation only runs with `--confirm`.
+
+```bash
+# Cost preview only — no job created, no charge
+python tools/higgsfield_video.py --prompt "cinematic product shot" --output clip.mp4
+
+# Generate for real (only after reviewing the cost)
+python tools/higgsfield_video.py --prompt "cinematic product shot" --output clip.mp4 --confirm
+
+# Image-to-video
+python tools/higgsfield_video.py --prompt "camera pans right" --image photo.jpg --output clip.mp4 --confirm
+
+# List available video models
+python tools/higgsfield_video.py --list-models
+```
+
+Default model is `seedance_2_0_mini` (cost-efficient); override with `--model <job_type>`. Without `--confirm` the tool only runs `higgsfield generate cost` and `higgsfield account status` — verified live to be free of charge (balance unchanged after a dry cost check).
 
 ### AI Music Generation (ACE-Step 1.5)
 
@@ -318,15 +467,18 @@ python tools/sadtalker.py \
 
 See `docs/sadtalker.md` for detailed options and troubleshooting.
 
-### Redub Sync Mode
+### Local Dubbing (Qwen3-TTS)
 
 ```bash
-python tools/redub.py --input video.mp4 --voice-id VOICE_ID --sync --output dubbed.mp4
+uv run --extra local-voice tools/redub.py \
+  --input video.mp4 \
+  --ref-audio REFERENCE.wav \
+  --ref-text "Exact transcript of the reference" \
+  --source-language English --target-language German \
+  --output dubbed.mp4 --consent-confirmed
 ```
 
-The `--sync` flag enables word-level time remapping — essential when TTS voice pacing differs from original. Without it, audio can drift 3-4+ seconds by the end.
-
-**How it works:** Scribe transcribes original → TTS generates new audio with timestamps → segment mapping (15 words/segment) → FFmpeg variable speed per segment.
+This workflow runs MLX Whisper → local Argos translation → local Qwen3-TTS → FFmpeg. It requires permission to use the reference voice and never falls back to a cloud provider. The generated dub replaces the original audio track; the original ambience and music are not retained separately. Listen to the result and check translation/timing before release.
 
 ### NotebookLM Branding
 
@@ -438,7 +590,7 @@ Sum of scenes + transitions = total video
 ### TTS Duration Drift (The Real Timing Problem)
 
 TTS engines do NOT consistently produce 150 WPM output. In practice:
-- **ElevenLabs** tends to compress pauses and speed through short sentences. A 50s script may produce 40-45s of audio.
+- Local TTS timing can vary; check pacing against the script before export.
 - **Qwen3-TTS** varies by speaker and tone preset. Ryan at "professional" tone speaks ~10% faster than "warm."
 - **Short scenes drift more** — a 5-second scene might be off by 30%, while a 30-second scene is off by 10%.
 

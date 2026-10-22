@@ -1,0 +1,313 @@
+{
+  "generated_at": "2026-09-21T23:39:09.621382+00:00",
+  "results": [
+    {
+      "capability": "F01",
+      "status": "PASS",
+      "reason": "Pillow-Transformationen und drei Formate gerendert.",
+      "measurements": {
+        "size": [
+          300,
+          200
+        ],
+        "alpha_range": [
+          180,
+          180
+        ],
+        "formats": [
+          "png",
+          "jpg",
+          "webp"
+        ]
+      },
+      "duration_s": 0.041
+    },
+    {
+      "capability": "F02",
+      "status": "PASS",
+      "reason": "Spec-JSON-Vertrag (Form+Bild+Text) via Playwright/Chromium gerendert.",
+      "measurements": {
+        "png_bytes": 4273
+      },
+      "duration_s": 0.323
+    },
+    {
+      "capability": "F03",
+      "status": "PASS",
+      "reason": "A5-Flyer-Vorlage als PNG+PDF gerendert; Text/Höhe/Schrift per `set` geändert und neu gerendert unterscheidet sich vom ersten Lauf.",
+      "measurements": {
+        "png_1_bytes": 21957,
+        "png_2_bytes": 29368
+      },
+      "duration_s": 0.532
+    },
+    {
+      "capability": "F04",
+      "status": "PASS",
+      "reason": "Trim/Concat mit Audio gerendert.",
+      "measurements": {
+        "duration_s": 1.833333,
+        "expected_s": 1.8,
+        "fps": 30.0
+      },
+      "duration_s": 0.198
+    },
+    {
+      "capability": "F05",
+      "status": "PASS",
+      "reason": "Reframe, Tempo, XFade-Blende und Overlay gerendert.",
+      "measurements": {
+        "width": 1080,
+        "height": 1920,
+        "duration_s": 2.702521
+      },
+      "duration_s": 0.293
+    },
+    {
+      "capability": "F06",
+      "status": "PASS",
+      "reason": "Silence-Cutter auf lokales Pausenmaterial angewendet.",
+      "measurements": {
+        "silences": 1,
+        "segments": 2,
+        "duration_s": 1.433333
+      },
+      "duration_s": 0.249
+    },
+    {
+      "capability": "F07",
+      "status": "PASS",
+      "reason": "Sprache/Musik, Fades, Normalisierung und M4A-Konvertierung geprüft.",
+      "measurements": {
+        "loudness_lufs": -15.7,
+        "codec": "aac",
+        "duration_s": 3.0
+      },
+      "duration_s": 0.176
+    },
+    {
+      "capability": "F08",
+      "status": "PASS",
+      "reason": "Lokale Kokoro-Ausgabe für Deutsch und Englisch erzeugt.",
+      "measurements": {
+        "de_duration_s": 3.63,
+        "en_duration_s": 2.22
+      },
+      "duration_s": 2.816
+    },
+    {
+      "capability": "F09",
+      "status": "PASS",
+      "reason": "Deutsch und Englisch lokal mit zeitgestempelten Segmenten transkribiert.",
+      "measurements": {
+        "segments": {
+          "de": 1,
+          "en": 1
+        }
+      },
+      "duration_s": 3.199
+    },
+    {
+      "capability": "F10",
+      "status": "PASS",
+      "reason": "SRT/VTT validiert und lokal via Remotion eingebrannt.",
+      "measurements": {
+        "cues": 2,
+        "output_bytes": 198963,
+        "style": "Remotion SubtitleBurn composition"
+      },
+      "duration_s": 1.92
+    },
+    {
+      "capability": "F11",
+      "status": "PASS",
+      "reason": "Lokale Ollama-Übersetzung Deutsch→Englisch→Deutsch mit stabilen Zeitcodes.",
+      "measurements": {
+        "model": "gemma-code:latest",
+        "cues": 1
+      },
+      "duration_s": 7.96
+    },
+    {
+      "capability": "F12",
+      "status": "PASS",
+      "reason": "Routing-Tabelle deckt alle 12 Aufgabentypen ab; lokale Backends live geprüft (ai_router_check); Cloud-Backends bestätigt blockiert (internal_only).",
+      "measurements": {
+        "routing": "contracts/task-routing.json",
+        "backends": {
+          "ollama": true,
+          "whisper": true,
+          "kokoro": true,
+          "ffmpeg": true,
+          "playwright": true,
+          "remotion": true,
+          "cloud_blocked": true
+        },
+        "missing_local_backends": [],
+        "cloud_network_calls": 0
+      },
+      "duration_s": 0.853
+    },
+    {
+      "capability": "F13",
+      "status": "FAIL",
+      "reason": "RuntimeError: node: Ist 'v22.22.2' erfüllt nicht >=22.23.2.",
+      "measurements": {},
+      "duration_s": 0.593
+    },
+    {
+      "capability": "F14",
+      "status": "PASS",
+      "reason": "Pipeline vollständig registriert: Video, SRT/VTT/Übersetzung/Transcript als abgeleitete Text-Assets sowie Schnitt (MASTER) und Normalisierung (VARIANT) mit vererbten Rechten.",
+      "measurements": {
+        "media_records": 7,
+        "subtitle_cues": 2,
+        "parent_ids": [
+          "ast_49bff2d331e360e4539f"
+        ],
+        "release_dry_run_allowed": false,
+        "release_dry_run_reasons": [
+          "ast_c1d55af955ce1ac75d4f: rights_status ist nicht für Delivery freigegeben.",
+          "ast_c1d55af955ce1ac75d4f: commercial_use ist nicht allowed.",
+          "ast_c1d55af955ce1ac75d4f: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_c1d55af955ce1ac75d4f: ai_involvement.ai_generated ist unknown oder fehlt.",
+          "ast_49bff2d331e360e4539f: rights_status ist nicht für Delivery freigegeben.",
+          "ast_49bff2d331e360e4539f: commercial_use ist nicht allowed.",
+          "ast_49bff2d331e360e4539f: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_49bff2d331e360e4539f: ai_involvement.ai_generated ist unknown oder fehlt.",
+          "ast_af6a8d018ed8da07efed: rights_status ist nicht für Delivery freigegeben.",
+          "ast_af6a8d018ed8da07efed: commercial_use ist nicht allowed.",
+          "ast_af6a8d018ed8da07efed: person_consent ist nicht dokumentiert oder nicht_needed.",
+          "ast_af6a8d018ed8da07efed: ai_involvement.ai_generated ist unknown oder fehlt."
+        ]
+      },
+      "duration_s": 4.203
+    },
+    {
+      "capability": "F15",
+      "status": "PASS",
+      "reason": "Bestehende Egress- und Delivery-Gate-Tests bestanden.",
+      "measurements": {
+        "pytest": "..............                                                           [100%]\n14 passed in 0.32s"
+      },
+      "duration_s": 0.499
+    },
+    {
+      "capability": "F16",
+      "status": "PASS",
+      "reason": "PERSON_LOCK-Set angelegt/verifiziert/gebunden, Job enthält den Lock; ein nach der Registrierung manipuliertes Member wird von verify_set und job_spec.build abgelehnt.",
+      "measurements": {
+        "reference_set_id": "rset_bc5dd52cc00e9c032b06",
+        "job_id": "job_20260921T233907480135"
+      },
+      "duration_s": 0.016
+    },
+    {
+      "capability": "F17",
+      "status": "PASS",
+      "reason": "QC-Verdikt geschrieben, DELIVERY ohne Accept abgelehnt und nach Review erlaubt, Retry-Limit durchgesetzt.",
+      "measurements": {
+        "verdict_id": "qcv_ff34bc24b28fcb756160",
+        "delivery_asset_id": "ast_c66aae73920291f0c04c"
+      },
+      "duration_s": 0.513
+    },
+    {
+      "capability": "F18",
+      "status": "PASS",
+      "reason": "Cache-Treffer wiederverwendet ein bestehendes Asset; premium bleibt ohne Freigabedatei blockiert und selbst mit Freigabe zusätzlich durch den Egress-Guard blockiert.",
+      "measurements": {
+        "cost_decisions": 1,
+        "cost_log_lines": 1
+      },
+      "duration_s": 0.007
+    },
+    {
+      "capability": "F19",
+      "status": "PASS",
+      "reason": "project_init erzeugt alle Projektordner und ein schema-valides Manifest.",
+      "measurements": {
+        "project_id": "acceptance-project"
+      },
+      "duration_s": 0.001
+    },
+    {
+      "capability": "F20",
+      "status": "PASS",
+      "reason": "13 Plattform-Profile vorhanden, schema-valide, alle UNVERIFIED.",
+      "measurements": {
+        "youtube_long": "UNVERIFIED",
+        "youtube_short": "UNVERIFIED",
+        "instagram_reel": "UNVERIFIED",
+        "instagram_feed": "UNVERIFIED",
+        "facebook_video": "UNVERIFIED",
+        "tiktok": "UNVERIFIED",
+        "x_video": "UNVERIFIED",
+        "website_hero": "UNVERIFIED",
+        "ecommerce_video": "UNVERIFIED",
+        "ecommerce_image": "UNVERIFIED",
+        "ad_16x9": "UNVERIFIED",
+        "ad_1x1": "UNVERIFIED",
+        "ad_9x16": "UNVERIFIED"
+      },
+      "duration_s": 0.002
+    },
+    {
+      "capability": "F21",
+      "status": "PASS",
+      "reason": "Reframe ohne Fokus-Spec abgelehnt (needs_human); mit Spec erzeugen unterschiedliche Fokuspunkte nachweislich unterschiedliche Ausgaben.",
+      "measurements": {
+        "left_bytes": 87133,
+        "right_bytes": 88641
+      },
+      "duration_s": 0.378
+    },
+    {
+      "capability": "F22",
+      "status": "PASS",
+      "reason": "prepare extrahiert Frames; Cloud-Anfrage ohne Freigabe abgelehnt und geloggt; ingest validiert das Ergebnis und registriert es als ai_generated=partial.",
+      "measurements": {
+        "frames": 3,
+        "semantic_asset_id": "ast_d68b3c202eea72b30c6e"
+      },
+      "duration_s": 0.155
+    },
+    {
+      "capability": "F23",
+      "status": "PASS",
+      "reason": "Provenance-Bericht (JSON+MD, inkl. unsigniertem C2PA-Mapping) erzeugt; provenance_status und ai_labeling_status gesetzt.",
+      "measurements": {
+        "json_path": "/var/folders/n3/f6l03t1501x9svnv4nct71wr0000gn/T/video-toolkit-acceptance-txby4jey/projects-f23/acceptance-provenance/provenance/provenance-20260921T233908Z.json",
+        "assets": 1
+      },
+      "duration_s": 0.03
+    },
+    {
+      "capability": "F24",
+      "status": "PASS",
+      "reason": "Release-Paket ohne Labeling/Provenance/Metadaten abgelehnt; mit allen dreien erzeugt und erst nach approve() freigegeben.",
+      "measurements": {
+        "package_dir": "/var/folders/n3/f6l03t1501x9svnv4nct71wr0000gn/T/video-toolkit-acceptance-txby4jey/release-ready/acceptance-release-f24/ad_1x1"
+      },
+      "duration_s": 0.524
+    },
+    {
+      "capability": "F25",
+      "status": "PASS",
+      "reason": "Alle 5 Publish-Adapter validieren das freigegebene Paket ohne Befunde; send() bleibt für jeden Adapter durch den Egress-Guard blockiert.",
+      "measurements": {
+        "adapters": [
+          "ecommerce",
+          "facebook",
+          "instagram",
+          "tiktok",
+          "youtube"
+        ]
+      },
+      "duration_s": 0.516
+    }
+  ],
+  "pass_count": 24,
+  "total": 25,
+  "complete": false
+}

@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """
-Generate voiceover audio using ElevenLabs or Qwen3-TTS.
+Generate voiceover audio using local TTS providers.
 
 Usage:
-    # From script file (ElevenLabs, default)
+    # From script file (local default provider)
     python tools/voiceover.py --script VOICEOVER-SCRIPT.md --output public/audio/voiceover.mp3
 
     # From stdin (for AI piping)
     echo "Hello world" | python tools/voiceover.py --output voiceover.mp3
-
-    # With custom voice
-    python tools/voiceover.py --script script.txt --voice-id ABC123 --output out.mp3
 
     # JSON output for machine parsing
     python tools/voiceover.py --script script.txt --output out.mp3 --json
@@ -21,10 +18,11 @@ Usage:
     # With concat for SadTalker narrator
     python tools/voiceover.py --scene-dir public/audio/scenes --concat public/audio/voiceover-concat.mp3
 
-    # Using Qwen3-TTS provider
-    python tools/voiceover.py --provider qwen3 --speaker Ryan --scene-dir public/audio/scenes --json
-    python tools/voiceover.py --provider qwen3 --tone warm --scene-dir public/audio/scenes --json
-    python tools/voiceover.py --provider qwen3 --instruct "Speak warmly" --script script.txt --output out.mp3
+    # Using Piper (local, German)
+    python tools/voiceover.py --provider piper --scene-dir public/audio/scenes --json
+    python tools/voiceover.py --provider piper --piper-speed 0.9 --script script.txt \\
+        --output out.mp3
+
 """
 
 import argparse
@@ -40,55 +38,24 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     get_brand_dir,
     get_default_voice_provider,
-    get_elevenlabs_api_key,
     get_sixtydb_api_key,
     get_sixtydb_voice_id,
-    get_voice_id,
     load_brand_voice_config,
 )
-
-
-def _get_elevenlabs_imports():
-    """Lazy import ElevenLabs SDK (only when provider=elevenlabs)."""
-    try:
-        from elevenlabs import VoiceSettings, save
-        from elevenlabs.client import ElevenLabs
-        return ElevenLabs, VoiceSettings, save
-    except ImportError:
-        print(
-            "Error: ElevenLabs Python package not installed.\n"
-            "\n"
-            "You have 3 options:\n"
-            "\n"
-            "  1. Install ElevenLabs:\n"
-            "     pip install elevenlabs\n"
-            "\n"
-            "  2. Use Qwen3-TTS instead (free, self-hosted):\n"
-            "     python3 tools/voiceover.py --provider qwen3 --speaker Ryan --scene-dir public/audio/scenes --json\n"
-            "     (Requires RunPod account — run: python3 tools/qwen3_tts.py --setup)\n"
-            "\n"
-            "  3. Skip voiceover entirely:\n"
-            "     Videos render fine without audio. Add voiceover later when ready.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
 
 def parse_args():
     default_provider = get_default_voice_provider()
     parser = argparse.ArgumentParser(
-        description="Generate voiceover using ElevenLabs or Qwen3-TTS",
+        description="Generate voiceover using local TTS providers",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # ElevenLabs (default)
+  # Local default provider
   python tools/voiceover.py --script VOICEOVER-SCRIPT.md --output public/audio/voiceover.mp3
   python tools/voiceover.py --scene-dir public/audio/scenes --json
 
-  # Qwen3-TTS
-  python tools/voiceover.py --provider qwen3 --speaker Ryan --scene-dir public/audio/scenes --json
-  python tools/voiceover.py --provider qwen3 --tone warm --scene-dir public/audio/scenes --json
-  python tools/voiceover.py --provider qwen3 --instruct "Speak warmly" --script script.txt --output out.mp3
+  # Consent-gated local cloned voice: use tools/local_voice.py
         """,
     )
     parser.add_argument(
@@ -119,43 +86,41 @@ Examples:
         "--provider",
         type=str,
         default=default_provider,
-        choices=["elevenlabs", "qwen3", "kokoro", "60db"],
-        help=f"TTS provider (default: {default_provider}, from toolkit registry). "
-        "kokoro=local/free, qwen3=Modal/free, elevenlabs=paid, 60db=paid (Hindi/Indian voices)",
+        choices=["kokoro", "piper", "qwen3-local", "azure"],
+        help=f"TTS provider (default: {default_provider}); Azure Arabic requires --confirm-cloud",
     )
 
-    # ElevenLabs-specific options
+    # Legacy-compatible voice parameters (not connected to a cloud provider)
     parser.add_argument(
         "--voice-id",
         "-v",
         type=str,
-        help="ElevenLabs voice ID (uses default from toolkit-registry.json if not provided)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--model",
         "-m",
         type=str,
-        default="eleven_multilingual_v2",
-        choices=["eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_v3"],
-        help="ElevenLabs model (default: eleven_multilingual_v2). eleven_v3 is alpha.",
+        default="local",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--stability",
         type=float,
         default=0.85,
-        help="Voice stability 0-1 (default: 0.85, higher = more consistent)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--similarity",
         type=float,
         default=0.95,
-        help="Similarity boost 0-1 (default: 0.95, higher = closer to original)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--style",
         type=float,
         default=0.0,
-        help="Style exaggeration 0-1 (default: 0.0, lower = more neutral)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--speed",
@@ -170,13 +135,13 @@ Examples:
         type=str,
         default="synthesize",
         choices=["synthesize", "stream", "websocket"],
-        help="60db API transport (default: synthesize)",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--no-enhance",
         dest="enhance",
         action="store_false",
-        help="Disable 60db audio enhancement (on by default)",
+        help=argparse.SUPPRESS,
     )
     parser.set_defaults(enhance=True)
 
@@ -213,7 +178,12 @@ Examples:
     parser.add_argument(
         "--ref-text",
         type=str,
-        help="Qwen3-TTS transcript of reference audio (required with --ref-audio)",
+        help="Exact transcript of the local voice reference (required with --ref-audio)",
+    )
+    parser.add_argument(
+        "--consent-confirmed",
+        action="store_true",
+        help="Confirm that you own or have explicit permission to clone the reference voice",
     )
     parser.add_argument(
         "--temperature",
@@ -234,13 +204,66 @@ Examples:
         help="Kokoro TTS voice (default: am_michael). Use 'python tools/kokoro_tts.py --list-voices' to see all 28 voices.",
     )
 
+    # Piper-specific options
+    parser.add_argument(
+        "--piper-voice",
+        type=str,
+        default="thorsten",
+        help="Piper TTS voice (default: thorsten). "
+        "Use 'python tools/piper_tts.py --list-voices' to see all.",
+    )
+    parser.add_argument(
+        "--piper-speed",
+        type=float,
+        default=1.0,
+        help="Piper speech speed multiplier (default: 1.0, range: 0.5-2.0)",
+    )
+
+    # Gemini TTS-specific options
+    parser.add_argument(
+        "--gemini-voice",
+        type=str,
+        default="Kore",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--gemini-style",
+        type=str,
+        default=None,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--gemini-model",
+        type=str,
+        default="gemini-3.8-flash-lite-tts",
+        help=argparse.SUPPRESS,
+    )
+
+    parser.add_argument(
+        "--azure-locale",
+        choices=["ar-TN", "ar-DZ", "ar-MA", "ar-LB", "ar-SY", "ar-EG", "ar-msa"],
+        default="ar-TN",
+        help="Azure Arabic variety (ar-msa uses a Saudi voice because Azure has no MSA locale)",
+    )
+    parser.add_argument(
+        "--azure-gender",
+        choices=["female", "male"],
+        default="female",
+        help="Azure Arabic voice gender (default: female)",
+    )
+    parser.add_argument(
+        "--confirm-cloud",
+        action="store_true",
+        help="Confirm sending script text to Azure; usage beyond the free quota may be billed",
+    )
+
     # Cloud GPU provider (for Qwen3-TTS)
     parser.add_argument(
         "--cloud",
         type=str,
         default="modal",
         choices=["runpod", "modal"],
-        help="Cloud GPU provider for Qwen3-TTS (default: modal)",
+        help=argparse.SUPPRESS,
     )
 
     # Brand integration
@@ -307,52 +330,6 @@ def get_audio_duration(file_path: str) -> float | None:
     except (FileNotFoundError, ValueError):
         pass
     return None
-
-
-def generate_single_audio(
-    client,
-    script: str,
-    output_path: Path,
-    voice_id: str,
-    model: str,
-    stability: float,
-    similarity: float,
-    style: float,
-    speed: float,
-    max_wpm: float | None = None,
-) -> dict:
-    """Generate a single audio file from script text using ElevenLabs. Returns result dict."""
-    _, VoiceSettings, save = _get_elevenlabs_imports()
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    audio = client.text_to_speech.convert(
-        text=script,
-        voice_id=voice_id,
-        model_id=model,
-        voice_settings=VoiceSettings(
-            stability=stability,
-            similarity_boost=similarity,
-            style=style,
-            speed=speed,
-        ),
-    )
-
-    save(audio, str(output_path))
-
-    duration = get_audio_duration(str(output_path))
-
-    result = {
-        "success": True,
-        "output": str(output_path),
-        "script_chars": len(script),
-    }
-    if duration:
-        result["duration_seconds"] = round(duration, 2)
-        result["duration_frames_30fps"] = int(duration * 30)
-
-    _apply_pacing_qc(result, script, max_wpm)
-    return result
 
 
 def _apply_pacing_qc(result: dict, script: str, max_wpm: float | None) -> None:
@@ -492,16 +469,106 @@ def generate_single_audio_kokoro(
     return result
 
 
+def generate_single_audio_piper(
+    script: str,
+    output_path: Path,
+    voice: str = "thorsten",
+    speed: float = 1.0,
+    max_wpm: float | None = None,
+) -> dict:
+    """Generate a single audio file from script text using Piper TTS. Returns result dict."""
+    from piper_tts import generate_audio
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    result = generate_audio(
+        text=script,
+        output_path=str(output_path),
+        voice=voice,
+        speed=speed,
+        verbose=False,
+    )
+    _apply_pacing_qc(result, script, max_wpm)
+    return result
+
+
+def generate_single_audio_qwen3_local(
+    script: str,
+    output_path: Path,
+    ref_audio: str,
+    ref_text: str,
+    language: str,
+    consent_confirmed: bool,
+) -> dict:
+    """Generate a consent-gated cloned voice entirely on the local MLX runtime."""
+    from local_voice import generate_audio
+
+    return generate_audio(
+        text=script,
+        output_path=output_path,
+        ref_audio=ref_audio,
+        ref_text=ref_text,
+        language=language,
+        consent_confirmed=consent_confirmed,
+    )
+
+
+def generate_single_audio_gemini(
+    script: str,
+    output_path: Path,
+    voice: str = "Kore",
+    style: str | None = None,
+    model: str = "gemini-3.8-flash-lite-tts",
+    max_wpm: float | None = None,
+) -> dict:
+    """Generate a single audio file from script text using Gemini TTS. Returns result dict."""
+    from gemini_tts import generate_audio
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    result = generate_audio(
+        text=script,
+        output_path=str(output_path),
+        voice=voice,
+        style=style,
+        model=model,
+        verbose=False,
+    )
+    _apply_pacing_qc(result, script, max_wpm)
+    return result
+
+
+def generate_single_audio_azure(
+    script: str,
+    output_path: Path,
+    locale: str = "ar-TN",
+    gender: str = "female",
+    max_wpm: float | None = None,
+) -> dict:
+    """Generate Arabic speech using an explicitly selected Azure Speech voice."""
+    from azure_tts import generate_audio
+
+    result = generate_audio(
+        text=script,
+        output_path=output_path,
+        locale=locale,
+        gender=gender,
+    )
+    if result.get("success"):
+        _apply_pacing_qc(result, script, max_wpm)
+    return result
+
+
 def process_scene_directory(
     scene_dir: Path,
     dry_run: bool = False,
     json_output: bool = False,
     # Provider
     provider: str = "kokoro",
-    # ElevenLabs params
+    # Shared/legacy parameter slots retained for the existing local providers.
     client=None,
     voice_id: str = "",
-    model: str = "eleven_multilingual_v2",
+    model: str = "local",
     stability: float = 0.85,
     similarity: float = 0.95,
     style: float = 0.0,
@@ -522,15 +589,40 @@ def process_scene_directory(
     # Kokoro params
     voice: str = "am_michael",
     kokoro_speed: float = 1.0,
+    # Piper params
+    piper_voice: str = "thorsten",
+    piper_speed: float = 1.0,
+    consent_confirmed: bool = False,
+    # Gemini params
+    gemini_voice: str = "Kore",
+    gemini_style: str | None = None,
+    gemini_model: str = "gemini-3.8-flash-lite-tts",
+    azure_locale: str = "ar-TN",
+    azure_gender: str = "female",
+    confirm_cloud: bool = False,
     # Common
     max_wpm: float | None = None,
 ) -> list[dict]:
     """Process all .txt files in directory, generate .mp3 for each."""
+    if provider not in {"kokoro", "piper", "qwen3-local", "azure"}:
+        raise ValueError(f"Cloud or paid voice provider disabled: {provider}")
+    if provider == "azure" and not dry_run and not confirm_cloud:
+        raise ValueError("Azure TTS requires --confirm-cloud for each run")
     txt_files = sorted(scene_dir.glob("*.txt"))
 
     if not txt_files:
         print(f"Error: No .txt files found in {scene_dir}", file=sys.stderr)
         sys.exit(1)
+    if provider == "azure" and not dry_run:
+        existing_outputs = [
+            str(path.with_suffix(".mp3"))
+            for path in txt_files
+            if path.with_suffix(".mp3").exists()
+        ]
+        if existing_outputs:
+            raise ValueError(
+                "Refusing to overwrite existing Azure output(s): " + ", ".join(existing_outputs)
+            )
 
     results = []
     total_duration = 0.0
@@ -614,19 +706,42 @@ def process_scene_directory(
                     api_key=sixtydb_api_key,
                     max_wpm=max_wpm,
                 )
-            else:
-                result = generate_single_audio(
-                    client=client,
+            elif provider == "piper":
+                result = generate_single_audio_piper(
                     script=script,
                     output_path=mp3_file,
-                    voice_id=voice_id,
-                    model=model,
-                    stability=stability,
-                    similarity=similarity,
-                    style=style,
-                    speed=speed,
+                    voice=piper_voice,
+                    speed=piper_speed,
                     max_wpm=max_wpm,
                 )
+            elif provider == "qwen3-local":
+                result = generate_single_audio_qwen3_local(
+                    script=script,
+                    output_path=mp3_file,
+                    ref_audio=ref_audio or "",
+                    ref_text=ref_text or "",
+                    language="German" if language == "Auto" else language,
+                    consent_confirmed=consent_confirmed,
+                )
+            elif provider == "gemini":
+                result = generate_single_audio_gemini(
+                    script=script,
+                    output_path=mp3_file,
+                    voice=gemini_voice,
+                    style=gemini_style,
+                    model=gemini_model,
+                    max_wpm=max_wpm,
+                )
+            elif provider == "azure":
+                result = generate_single_audio_azure(
+                    script=script,
+                    output_path=mp3_file,
+                    locale=azure_locale,
+                    gender=azure_gender,
+                    max_wpm=max_wpm,
+                )
+            else:
+                raise ValueError(f"Voice provider disabled: {provider}")
             result["script"] = str(txt_file)
             results.append(result)
 
@@ -703,6 +818,25 @@ def main():
     if not args.scene_dir and not args.output:
         print("Error: --output is required for single-file mode", file=sys.stderr)
         sys.exit(1)
+
+    if provider == "azure" and not args.confirm_cloud and not args.dry_run:
+        print(
+            "Error: Azure TTS sends the script text to Microsoft and may be billed "
+            "after the free quota; add --confirm-cloud to continue.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if provider == "azure" and not args.dry_run:
+        missing = [
+            name for name in ("AZURE_SPEECH_KEY", "AZURE_SPEECH_REGION")
+            if not os.getenv(name)
+        ]
+        if missing:
+            print(
+                "Error: Configure Azure Speech credentials first: " + ", ".join(missing),
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     if args.ref_audio and not args.ref_text:
         print("Error: --ref-text is required with --ref-audio", file=sys.stderr)
@@ -791,10 +925,6 @@ def main():
                 args.voice = kokoro_cfg["voice"]
             if kokoro_cfg.get("speed") and args.speed == 1.0:
                 args.speed = kokoro_cfg["speed"]
-        elif provider == "elevenlabs":
-            # Apply voice ID from brand if not explicitly provided
-            if not args.voice_id and voice_config.get("voiceId") and voice_config["voiceId"] != "YOUR_VOICE_ID_HERE":
-                args.voice_id = voice_config["voiceId"]
         elif provider == "60db":
             # Apply 60db voice ID + settings from the brand's `sixtydb` block
             sixtydb_cfg = voice_config.get("sixtydb", {})
@@ -832,61 +962,6 @@ def main():
     voice_id = None
     sixtydb_api_key = None
 
-    if provider == "60db":
-        sixtydb_api_key = get_sixtydb_api_key()
-        if not sixtydb_api_key:
-            print(
-                "Error: No 60db API key found.\n"
-                "\n"
-                "You have 3 options:\n"
-                "\n"
-                "  1. Add a 60db key:\n"
-                "     echo \"SIXTYDB_API_KEY=sk_live_your_key\" >> .env\n"
-                "\n"
-                "  2. Use kokoro (free/local), qwen3 (free/Modal), or elevenlabs instead:\n"
-                "     python3 tools/voiceover.py --provider kokoro --scene-dir SCENES --json\n"
-                "     python3 tools/voiceover.py --provider qwen3 --scene-dir SCENES --json\n"
-                "\n"
-                "  3. Skip voiceover entirely:\n"
-                "     Videos render fine without audio. Add voiceover later when ready.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        from sixtydb_tts import DEFAULT_VOICE_ID as _SIXTYDB_DEFAULT_VOICE
-        voice_id = args.voice_id or get_sixtydb_voice_id() or _SIXTYDB_DEFAULT_VOICE
-
-    if provider == "elevenlabs":
-        api_key = get_elevenlabs_api_key()
-        if not api_key:
-            print(
-                "Error: No ElevenLabs API key found.\n"
-                "\n"
-                "You have 3 options:\n"
-                "\n"
-                "  1. Add an ElevenLabs key:\n"
-                "     echo \"ELEVENLABS_API_KEY=your_key\" >> .env\n"
-                "\n"
-                "  2. Use Qwen3-TTS instead (free, self-hosted):\n"
-                "     python3 tools/voiceover.py --provider qwen3 --speaker Ryan --scene-dir public/audio/scenes --json\n"
-                "     (Requires RunPod account — run: python3 tools/qwen3_tts.py --setup)\n"
-                "\n"
-                "  3. Skip voiceover entirely:\n"
-                "     Videos render fine without audio. Add voiceover later when ready.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        voice_id = args.voice_id or get_voice_id()
-        if not voice_id:
-            print(
-                "Error: No voice ID provided and none found in toolkit-registry.json",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-        ElevenLabs, _, _ = _get_elevenlabs_imports()
-        client = ElevenLabs(api_key=api_key)
 
     # Per-scene mode
     if args.scene_dir:
@@ -897,10 +972,14 @@ def main():
 
         if not args.json:
             txt_count = len(list(scene_dir.glob("*.txt")))
-            provider_label = {"qwen3": "Qwen3-TTS", "kokoro": "Kokoro TTS", "60db": "60db"}.get(
-                provider, "ElevenLabs"
+            provider_label = {
+                "qwen3-local": "Qwen3-TTS lokal", "kokoro": "Kokoro TTS", "piper": "Piper TTS",
+                "gemini": "Gemini TTS", "azure": "Azure Arabic TTS",
+            }.get(provider, "local TTS")
+            print(
+                f"Processing {txt_count} scene scripts in {scene_dir} ({provider_label})...",
+                file=sys.stderr,
             )
-            print(f"Processing {txt_count} scene scripts in {scene_dir} ({provider_label})...", file=sys.stderr)
 
         if args.dry_run:
             if not args.json:
@@ -927,6 +1006,15 @@ def main():
                 cloud=args.cloud,
                 voice=args.voice,
                 kokoro_speed=args.speed,
+                piper_voice=args.piper_voice,
+                piper_speed=args.piper_speed,
+                consent_confirmed=args.consent_confirmed,
+                gemini_voice=args.gemini_voice,
+                gemini_style=args.gemini_style,
+                gemini_model=args.gemini_model,
+                azure_locale=args.azure_locale,
+                azure_gender=args.azure_gender,
+                confirm_cloud=args.confirm_cloud,
                 enhance=args.enhance,
                 transport=args.transport,
                 sixtydb_api_key=sixtydb_api_key,
@@ -940,16 +1028,7 @@ def main():
                 "total_chars": total_chars,
                 "scenes": results,
             }
-            if provider == "elevenlabs":
-                result["voice_id"] = voice_id
-                result["model"] = args.model
-                result["settings"] = {
-                    "stability": args.stability,
-                    "similarity": args.similarity,
-                    "style": args.style,
-                    "speed": args.speed,
-                }
-            elif provider == "60db":
+            if provider == "60db":
                 result["voice_id"] = voice_id
                 result["transport"] = args.transport
                 result["settings"] = {
@@ -958,6 +1037,14 @@ def main():
                     "speed": args.speed,
                     "enhance": args.enhance,
                 }
+            elif provider == "gemini":
+                result["voice"] = args.gemini_voice
+                result["model"] = args.gemini_model
+                if args.gemini_style:
+                    result["style"] = args.gemini_style
+            elif provider == "azure":
+                result["locale"] = args.azure_locale
+                result["voice_gender"] = args.azure_gender
             else:
                 result["speaker"] = args.speaker
                 result["language"] = args.language
@@ -996,6 +1083,15 @@ def main():
             cloud=args.cloud,
             voice=args.voice,
             kokoro_speed=args.speed,
+            piper_voice=args.piper_voice,
+            piper_speed=args.piper_speed,
+            consent_confirmed=args.consent_confirmed,
+            gemini_voice=args.gemini_voice,
+            gemini_style=args.gemini_style,
+            gemini_model=args.gemini_model,
+            azure_locale=args.azure_locale,
+            azure_gender=args.azure_gender,
+            confirm_cloud=args.confirm_cloud,
             enhance=args.enhance,
             transport=args.transport,
             sixtydb_api_key=sixtydb_api_key,
@@ -1013,12 +1109,12 @@ def main():
             "total_duration_frames_30fps": int(total_duration * 30),
             "scenes": results,
         }
-        if provider == "elevenlabs":
-            result["voice_id"] = voice_id
-            result["model"] = args.model
-        elif provider == "60db":
+        if provider == "60db":
             result["voice_id"] = voice_id
             result["transport"] = args.transport
+        elif provider == "azure":
+            result["locale"] = args.azure_locale
+            result["voice_gender"] = args.azure_gender
 
         # Concat if requested
         if args.concat:
@@ -1056,16 +1152,7 @@ def main():
             "script_chars": len(script),
             "output": str(output_path),
         }
-        if provider == "elevenlabs":
-            result["voice_id"] = voice_id
-            result["model"] = args.model
-            result["settings"] = {
-                "stability": args.stability,
-                "similarity": args.similarity,
-                "style": args.style,
-                "speed": args.speed,
-            }
-        elif provider == "60db":
+        if provider == "60db":
             result["voice_id"] = voice_id
             result["transport"] = args.transport
             result["settings"] = {
@@ -1074,6 +1161,14 @@ def main():
                 "speed": args.speed,
                 "enhance": args.enhance,
             }
+        elif provider == "gemini":
+            result["voice"] = args.gemini_voice
+            result["model"] = args.gemini_model
+            if args.gemini_style:
+                result["style"] = args.gemini_style
+        elif provider == "azure":
+            result["locale"] = args.azure_locale
+            result["voice_gender"] = args.azure_gender
         else:
             result["speaker"] = args.speaker
             result["language"] = args.language
@@ -1087,12 +1182,15 @@ def main():
             print(json.dumps(result, indent=2))
         else:
             print(f"Would generate voiceover:")
-            if provider == "elevenlabs":
-                print(f"  Voice ID: {voice_id}")
-                print(f"  Model: {args.model}")
-            elif provider == "60db":
+            if provider == "60db":
                 print(f"  Voice ID: {voice_id}")
                 print(f"  Transport: {args.transport}")
+            elif provider == "gemini":
+                print(f"  Voice: {args.gemini_voice}")
+                print(f"  Model: {args.gemini_model}")
+            elif provider == "azure":
+                print(f"  Arabic variety: {args.azure_locale}")
+                print(f"  Voice gender: {args.azure_gender}")
             else:
                 print(f"  Speaker: {args.speaker}")
                 print(f"  Language: {args.language}")
@@ -1102,9 +1200,11 @@ def main():
 
     # Generate voiceover
     if not args.json:
-        provider_label = {"kokoro": "Kokoro TTS", "qwen3": "Qwen3-TTS", "60db": "60db"}.get(
-            provider, "ElevenLabs"
-        )
+        provider_label = {
+            "kokoro": "Kokoro TTS", "qwen3": "Qwen3-TTS", "60db": "60db", "piper": "Piper TTS",
+            "gemini": "Gemini TTS",
+            "azure": "Azure Arabic TTS",
+        }.get(provider, "local TTS")
         print(f"Generating voiceover ({len(script)} chars, {provider_label})...", file=sys.stderr)
 
     if provider == "kokoro":
@@ -1142,27 +1242,57 @@ def main():
             api_key=sixtydb_api_key,
             max_wpm=args.max_wpm,
         )
-    else:
-        result = generate_single_audio(
-            client=client,
+    elif provider == "piper":
+        result = generate_single_audio_piper(
             script=script,
             output_path=output_path,
-            voice_id=voice_id,
-            model=args.model,
-            stability=args.stability,
-            similarity=args.similarity,
-            style=args.style,
-            speed=args.speed,
+            voice=args.piper_voice,
+            speed=args.piper_speed,
             max_wpm=args.max_wpm,
         )
+    elif provider == "qwen3-local":
+        result = generate_single_audio_qwen3_local(
+            script=script,
+            output_path=output_path,
+            ref_audio=args.ref_audio or "",
+            ref_text=args.ref_text or "",
+            language="German" if args.language == "Auto" else args.language,
+            consent_confirmed=args.consent_confirmed,
+        )
+    elif provider == "gemini":
+        result = generate_single_audio_gemini(
+            script=script,
+            output_path=output_path,
+            voice=args.gemini_voice,
+            style=args.gemini_style,
+            model=args.gemini_model,
+            max_wpm=args.max_wpm,
+        )
+    elif provider == "azure":
+        result = generate_single_audio_azure(
+            script=script,
+            output_path=output_path,
+            locale=args.azure_locale,
+            gender=args.azure_gender,
+            max_wpm=args.max_wpm,
+        )
+    else:
+        raise ValueError(f"Voice provider disabled: {provider}")
 
     result["mode"] = "single"
     result["provider"] = provider
     if provider == "kokoro":
         result["voice"] = args.voice
-    elif provider == "elevenlabs":
-        result["voice_id"] = voice_id
-        result["model"] = args.model
+    elif provider == "piper":
+        result["voice"] = args.piper_voice
+    elif provider == "gemini":
+        result["voice"] = args.gemini_voice
+        result["model"] = args.gemini_model
+        if args.gemini_style:
+            result["style"] = args.gemini_style
+    elif provider == "azure":
+        result["locale"] = args.azure_locale
+        result["voice_gender"] = args.azure_gender
     elif provider == "60db":
         result["voice_id"] = voice_id
         result["transport"] = args.transport

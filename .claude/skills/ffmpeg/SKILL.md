@@ -63,7 +63,7 @@ ffmpeg -i input.mp4 -vn output.wav
 ### Convert Audio Formats
 
 ```bash
-# M4A to MP3 (for ElevenLabs voice samples)
+# M4A to MP3 conversion
 ffmpeg -i input.m4a -codec:a libmp3lame -qscale:a 2 output.mp3
 
 # WAV to MP3

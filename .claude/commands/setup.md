@@ -47,7 +47,6 @@ Prerequisites:
 Cloud GPU:      Not configured
 File transfer:  Not configured (using free fallback services)
 Voice:          Not configured
-ElevenLabs:     Not configured (optional, paid)
 
 Let's get you set up! We'll go through each feature one at a time.
 You can skip any step and come back later with /setup.
@@ -61,7 +60,6 @@ Toolkit Setup — All Configured
 Cloud GPU:      Modal (7 tools deployed)
 File transfer:  Cloudflare R2 (bucket: video-toolkit)
 Voice:          Qwen3-TTS (speaker: Ryan)
-ElevenLabs:     Configured
 
 Everything looks good! Want me to run a quick verification test?
 ```
@@ -337,47 +335,17 @@ python3 tools/flux2.py --prompt "A minimal geometric logo on dark background" \
 
 ### Explanation
 
-"For voiceovers in your videos, you have two options:
+"Voiceovers use local Kokoro or Piper without a paid API. Local voice cloning is
+available through Qwen3-TTS after an optional ~2.5 GB model download."
 
-**Qwen3-TTS (recommended, free)**
-Self-hosted on your cloud GPU. 9 built-in speakers, tone presets (warm, professional, excited...), and voice cloning. This is what most toolkit users use.
+### Lokales Qwen3-TTS Setup
 
-**ElevenLabs (optional, paid)**
-Premium cloud TTS with a large voice library. Pay-per-character. Better for some specific voice styles, but Qwen3-TTS is comparable quality for most use cases."
-
-### Qwen3-TTS Setup
-
-If Qwen3-TTS was deployed in Phase 4, it's already ready. Just confirm the default speaker:
+Für Voice Cloning wird das optionale lokale Modell nur nach ausdrücklichem
+Wunsch installiert:
 
 ```
-Qwen3-TTS is ready! Available speakers:
-  Ryan, Aiden, Vivian, Luna, Aurora, Aria, Nova, Stella, Orion
-
-Default speaker: Ryan (warm male voice)
-
-You can change the speaker per-video or set a default in your brand's voice.json.
-To preview voices: python3 tools/qwen3_tts.py --list-voices
+uv run --extra local-voice tools/local_voice.py --setup
 ```
-
-### ElevenLabs Setup (Optional)
-
-```
-1. Sign up at https://elevenlabs.io/
-2. Go to Profile → API Keys
-3. Copy your API key
-```
-
-After user provides the key, write to .env:
-```
-ELEVENLABS_API_KEY=xxx
-```
-
-Optionally set a default voice ID:
-```
-ELEVENLABS_VOICE_ID=xxx
-```
-
-Mention: "You can also use /voice-clone later to clone your own voice for a personal touch."
 
 ---
 
@@ -392,7 +360,6 @@ Mention: "You can also use /voice-clone later to clone your own voice for a pers
    - R2: test upload/download
    - Modal: modal app list (check apps are deployed)
    - RunPod: check API key works
-   - ElevenLabs: test API key
 3. Report results
 ```
 
@@ -423,13 +390,11 @@ File Transfer: Cloudflare R2
 Voice: Qwen3-TTS (Ryan)
   [check] Test generation successful
 
-ElevenLabs: Not configured (optional)
 
 Cost summary:
   - Modal: $30/mo free compute (you'll use ~$1-2/mo typical)
   - R2: Free (10GB storage, zero egress)
   - Qwen3-TTS: Free (runs on Modal compute)
-  - ElevenLabs: Not configured
 
 You're ready! Run /video to create your first video.
 ```
@@ -445,7 +410,6 @@ When `/setup` is run again on an already-configured toolkit:
    - "Verify everything works" → run smoke tests
    - "Add a new tool" → jump to Phase 4 tool selection
    - "Change cloud provider" → jump to Phase 2
-   - "Set up ElevenLabs" → jump to Phase 5
    - "Everything looks good" → exit
 
 ---

@@ -22,6 +22,7 @@
         "subtitle",
         "translate",
         "qc_visual",
+        "qc_vision",
         "semantic_analysis",
         "code"
       ],
@@ -36,6 +37,7 @@
         "subtitle": { "$ref": "#/$defs/route" },
         "translate": { "$ref": "#/$defs/route" },
         "qc_visual": { "$ref": "#/$defs/route" },
+        "qc_vision": { "$ref": "#/$defs/route" },
         "semantic_analysis": { "$ref": "#/$defs/route" },
         "code": { "$ref": "#/$defs/route" }
       }

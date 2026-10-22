@@ -32,7 +32,6 @@ Installed skills:
   1. **remotion** - Video compositions with React
      Triggers: Remotion, video composition, animations, interpolate, spring
 
-  2. **elevenlabs** - AI voiceover and audio generation
      Triggers: voiceover, TTS, voice cloning, sound effects, music
 
   Beta:
@@ -89,7 +88,6 @@ Media:
 
 ## Related
 
-- elevenlabs (audio generation)
 - ffmpeg (asset conversion)
 ```
 

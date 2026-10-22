@@ -146,7 +146,7 @@ def test_set_labeling_updates_manifest_and_writes_audit_line(env: Path) -> None:
     from contracts.validate_contracts import validate
 
     manifest = provenance_report.set_labeling(
-        "demo-project", "required_pending", note="Braucht KI-Kennzeichnung", by="constantin"
+        "demo-project", "required_pending", note="Braucht KI-Kennzeichnung", by="hannibal"
     )
 
     assert manifest["ai_labeling_status"] == "required_pending"
@@ -156,18 +156,18 @@ def test_set_labeling_updates_manifest_and_writes_audit_line(env: Path) -> None:
     )
     entries = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
     assert entries[0]["new_status"] == "required_pending"
-    assert entries[0]["by"] == "constantin"
+    assert entries[0]["by"] == "hannibal"
 
 
 def test_set_labeling_rejects_not_assessed(env: Path) -> None:
     with pytest.raises(provenance_report.ProvenanceError, match="status"):
         provenance_report.set_labeling(
-            "demo-project", "not_assessed", note="x", by="constantin"
+            "demo-project", "not_assessed", note="x", by="hannibal"
         )
 
 
 def test_set_labeling_rejects_empty_note(env: Path) -> None:
     with pytest.raises(provenance_report.ProvenanceError, match="note"):
         provenance_report.set_labeling(
-            "demo-project", "assessed_not_required", note="  ", by="constantin"
+            "demo-project", "assessed_not_required", note="  ", by="hannibal"
         )

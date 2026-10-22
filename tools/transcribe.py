@@ -109,9 +109,7 @@ def _split_cue_text(text: str, max_chars: int) -> list[str]:
     return chunks
 
 
-def _split_oversized_cue(
-    cue: dict[str, object], max_chars: int
-) -> list[dict[str, object]]:
+def _split_oversized_cue(cue: dict[str, object], max_chars: int) -> list[dict[str, object]]:
     """Subdivide one too-long cue, spreading its time range proportionally.
 
     Sub-cues stay contiguous (no artificial overlaps), stay within the
@@ -186,6 +184,43 @@ def build_subtitle_cues(
     return subdivided
 
 
+def build_script_authoritative_cues(
+    timing_payload: object, script: str, max_chars: int = 42, max_duration: float = 6.0
+) -> list[dict[str, object]]:
+    """Keep Whisper timing but replace its lexical output with the known script.
+
+    This is intentionally one-way: recognition may be imperfect for a TTS voice,
+    but it still supplies observed time windows.  The delivered captions always
+    retain the approved script wording.
+    """
+    timings = build_subtitle_cues(timing_payload, max_chars=max_chars, max_duration=max_duration)
+    words = script.split()
+    if not words:
+        raise ValueError("Caption-Skript darf nicht leer sein.")
+    if not timings:
+        raise ValueError("Whisper lieferte keine Zeitfenster.")
+    total_duration = sum(_as_seconds(cue["end"]) - _as_seconds(cue["start"]) for cue in timings)
+    assigned = 0
+    cues: list[dict[str, object]] = []
+    for index, timing in enumerate(timings):
+        remaining_cues = len(timings) - index - 1
+        if index == len(timings) - 1:
+            end = len(words)
+        else:
+            duration = _as_seconds(timing["end"]) - _as_seconds(timing["start"])
+            share = duration / total_duration if total_duration else 1 / len(timings)
+            end = max(assigned + 1, round(len(words) * share) + assigned)
+            end = min(end, len(words) - remaining_cues)
+        text = " ".join(words[assigned:end])
+        assigned = end
+        cues.extend(
+            _split_oversized_cue(
+                {"text": text, "start": timing["start"], "end": timing["end"]}, max_chars
+            )
+        )
+    return cues
+
+
 def _timestamp(seconds: float, separator: str) -> str:
     milliseconds = round(seconds * 1000)
     hours, remainder = divmod(milliseconds, 3_600_000)
@@ -247,9 +282,7 @@ def write_vtt(cues: list[dict[str, object]], output_path: Path) -> None:
 
 
 def _parse_subtitle_timestamp(value: str, separator: str) -> float | None:
-    match = re.fullmatch(
-        rf"(\d{{2,}}):(\d{{2}}):(\d{{2}}){re.escape(separator)}(\d{{3}})", value
-    )
+    match = re.fullmatch(rf"(\d{{2,}}):(\d{{2}}):(\d{{2}}){re.escape(separator)}(\d{{3}})", value)
     if match is None:
         return None
     hours, minutes, seconds, milliseconds = (int(part) for part in match.groups())
@@ -361,15 +394,18 @@ def burn_in_subtitles(video_path: Path, subtitle_path: Path, output_path: Path) 
         raise RuntimeError("FFmpeg ist für den Burn-In nicht verfügbar.") from error
     except subprocess.CalledProcessError as error:
         detail = (
-            error.stderr.strip().splitlines()[-1]
-            if error.stderr
-            else "unbekannter FFmpeg-Fehler"
+            error.stderr.strip().splitlines()[-1] if error.stderr else "unbekannter FFmpeg-Fehler"
         )
         raise RuntimeError(f"FFmpeg-Burn-In fehlgeschlagen: {detail}") from error
 
 
-def transcribe(input_path: str, model: str = "small", language: str | None = None,
-               word_timestamps: bool = True, verbose: bool = True) -> dict | None:
+def transcribe(
+    input_path: str,
+    model: str = "small",
+    language: str | None = None,
+    word_timestamps: bool = True,
+    verbose: bool = True,
+) -> dict | None:
     try:
         import mlx_whisper
     except ImportError:
@@ -417,19 +453,35 @@ def main():
         type=Path,
         help="Existing .srt or .vtt file to QC (optionally burn into a video)",
     )
-    parser.add_argument("--model", "-m", default="small",
-                        choices=["tiny", "base", "small", "medium", "large-v3"],
-                        help="Whisper model (default: small)")
+    parser.add_argument(
+        "--model",
+        "-m",
+        default="small",
+        choices=["tiny", "base", "small", "medium", "large-v3"],
+        help="Whisper model (default: small)",
+    )
     parser.add_argument(
         "--language", "-l", help="Language code (e.g. 'en', 'de'). Auto if not set."
     )
     parser.add_argument("--output", "-o", help="Save transcript to file")
-    parser.add_argument("--words", action="store_true", default=True,
-                        help="Include word-level timestamps (default: on)")
+    parser.add_argument(
+        "--words",
+        action="store_true",
+        default=True,
+        help="Include word-level timestamps (default: on)",
+    )
     parser.add_argument("--json", action="store_true", help="Output full JSON result")
     parser.add_argument("--srt", type=Path, help="Write validated SRT subtitles")
     parser.add_argument("--vtt", type=Path, help="Write validated WebVTT subtitles")
     parser.add_argument("--subtitle-qc", action="store_true", help="Run deterministic subtitle QC")
+    parser.add_argument(
+        "--caption-script",
+        type=Path,
+        help=(
+            "Approved script text. With captions, Whisper provides timing only; "
+            "this text is emitted."
+        ),
+    )
     parser.add_argument("--burn-in", type=Path, help="Video to receive QC-passed burned subtitles")
     parser.add_argument("--burn-in-output", type=Path, help="Output path for --burn-in")
     parser.add_argument("--quiet", "-q", action="store_true", help="Suppress progress output")
@@ -476,15 +528,17 @@ def main():
 
     if args.srt or args.vtt or args.subtitle_qc:
         try:
-            cues = build_subtitle_cues(result)
+            if args.caption_script:
+                script = args.caption_script.read_text(encoding="utf-8")
+                cues = build_script_authoritative_cues(result, script)
+            else:
+                cues = build_subtitle_cues(result)
             errors = validate_subtitle_cues(cues)
         except ValueError as error:
             cues = []
             errors = [str(error)]
         if not cues and not errors:
-            errors.append(
-                "Transcript enthält keine Segmente — keine Untertitel erzeugt."
-            )
+            errors.append("Transcript enthält keine Segmente — keine Untertitel erzeugt.")
         if errors:
             print("Subtitle QC: FAIL", file=sys.stderr)
             print("\n".join(f"- {error}" for error in errors), file=sys.stderr)

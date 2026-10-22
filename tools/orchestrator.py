@@ -129,7 +129,9 @@ async def generate_voiceover(
     script_file = out_dir / f"script_{scene.index:02d}.txt"
     script_file.write_text(scene.text, encoding="utf-8")
 
-    provider = "elevenlabs" if premium else voice_cfg.get("provider", "kokoro")
+    if premium:
+        raise ValueError("Premium-Voiceover ist deaktiviert; es werden ausschließlich lokale Provider verwendet.")
+    provider = voice_cfg.get("provider", "kokoro")
     voice = voice_cfg.get("voice", "am_michael")
     speed = voice_cfg.get("speed", 1.0)
 
@@ -574,6 +576,9 @@ def orchestrate(
     output_dir: str | None = None,
     language: str = "de",
 ) -> Path:
+    if premium:
+        raise ValueError("Premium-Ausführung ist deaktiviert; dieser Orchestrator kann keine kostenpflichtigen Provider starten.")
+
     out_base = Path(output_dir) if output_dir else OUTPUT_DIR
     out_base.mkdir(parents=True, exist_ok=True)
 
@@ -679,13 +684,16 @@ Beispiele:
     ap.add_argument("input", nargs="?", default="", help="Thema, URL, oder leer wenn --script")
     ap.add_argument("--script", help="Explizite Script-Datei (.md)")
     ap.add_argument("--brand", default="default", choices=["default", "sac", "licbarska"])
-    ap.add_argument("--premium", action="store_true", help="ElevenLabs Voiceover + Music")
+    ap.add_argument("--premium", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--duration", type=int, default=60, help="Ziel-Länge in Sekunden")
     ap.add_argument("--no-music", action="store_true")
     ap.add_argument("--no-voiceover", action="store_true")
     ap.add_argument("--output", help="Ausgabe-Ordner (default: output/)")
     ap.add_argument("--language", default="de")
     args = ap.parse_args()
+
+    if args.premium:
+        ap.error("--premium ist deaktiviert; verwende den kostenlosen lokalen Standardpfad.")
 
     if not args.input and not args.script:
         ap.print_help()

@@ -70,7 +70,7 @@ def test_decide_cloud_task_type_without_approval_is_rejected(env: Path) -> None:
 def test_decide_cloud_task_type_with_approval_is_still_blocked_by_egress_guard(
     env: Path,
 ) -> None:
-    cost_router.approve("demo-project", "generate_image", by="constantin")
+    cost_router.approve("demo-project", "generate_image", by="hannibal")
 
     with pytest.raises(EgressBlocked):
         cost_router.decide(
@@ -111,7 +111,7 @@ def test_approve_rejects_empty_by(env: Path) -> None:
 
 def test_approve_rejects_unknown_project(env: Path) -> None:
     with pytest.raises(project_init.ProjectInitError):
-        cost_router.approve("no-such-project", "some_step", by="constantin")
+        cost_router.approve("no-such-project", "some_step", by="hannibal")
 
 
 def test_cache_hit_reuses_matching_derived_asset(

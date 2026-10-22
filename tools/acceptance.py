@@ -648,11 +648,15 @@ def _playwright_version() -> str | None:
 
 def _stack_versions() -> dict[str, Any]:
     remotion_info = _remotion_versions(ROOT / "node_modules" / ".bin" / "remotion")
+    venv_python = ROOT / ".venv" / "bin" / "python3"
+    python_cmd = str(venv_python) if venv_python.is_file() else [sys.executable, "--version"]
+    if isinstance(python_cmd, str):
+        python_cmd = [python_cmd, "--version"]
     versions: dict[str, Any] = {
         "ffmpeg": _version(["ffmpeg", "-version"]),
         "yt_dlp": _version(["yt-dlp", "--version"]),
         "node": _version(["node", "--version"]),
-        "python": _version([sys.executable, "--version"]),
+        "python": _version(python_cmd),
         "remotion": remotion_info["version"],
         "remotion_consistent": remotion_info["consistent"],
         "playwright": _playwright_version(),

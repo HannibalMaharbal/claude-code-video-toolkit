@@ -15,6 +15,7 @@ TASK_TYPES = {
     "subtitle",
     "translate",
     "qc_visual",
+    "qc_vision",
     "semantic_analysis",
     "code",
 }

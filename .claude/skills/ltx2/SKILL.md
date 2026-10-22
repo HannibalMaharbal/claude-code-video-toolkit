@@ -8,7 +8,7 @@ description: AI video generation with LTX-2.3 22B — text-to-video, image-to-vi
 > **DEPRECATED FROM ACTIVE ROUTING** — nicht gelöscht, historische Dokumentation
 > unverändert. **Nicht automatisch ausführen.** Zwingend: Claude Router →
 > Video-Governance-Gate (Kosten, Lizenz, Datenschutz, Account, Credits) →
-> ausdrückliche Constantin-Freigabe. Reaktivierung nur nach erneuter Prüfung
+> ausdrückliche Hannibal-Freigabe. Reaktivierung nur nach erneuter Prüfung
 > (Routing §14.14). Aktive Alternativen: lokal über FFmpeg/Remotion; für
 > generative Videoerzeugung gibt es aktuell keinen aktiven Pfad (Higgsfield nur
 > nach Gate-Freigabe).

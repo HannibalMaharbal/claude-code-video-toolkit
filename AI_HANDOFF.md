@@ -11,6 +11,22 @@
 
 # AI Handoff
 
+## Nachtrag — LTX-2.5 Qualitätsmodus quellenbasiert verifiziert
+
+- Datum: 2026-10-20. Schreibender Agent: Codex 1. Branch/Worktree:
+  `chore/ltx25-adapter` / `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`.
+- Die offizielle Lightricks-Dokumentation bezeichnet DFR als Produktionspfad
+  und Distilled als schnellen Einstieg. Der geschützte, gepinnte lokale
+  MLX-Runtime-Stand `57952288` bietet DFR nicht an; im installierten
+  LTX-2.5-Q8-Pack fehlt außerdem die dafür erforderliche Detailing-IC-LoRA.
+- Deshalb keine Runtime-Aktualisierung, kein Modelldownload und kein Wechsel
+  des Offline-Standards. `two-stages-hq` bleibt der beste bereits installierte
+  Modus (native 15 Schritte, `res_2s`, kein TeaCache), `two-stage` der
+  beschleunigte Kompromiss und `distilled` der schnellste sowie live geprüfte
+  Standard. Die Projektanleitung grenzt HQ nun ausdrücklich von DFR ab.
+- Fokussierte LTX-Dateien zusätzlich Ruff-konform formatiert. Kein echter
+  Mehrminuten-Render, kein Cloud-Aufruf, Commit, Push oder Deployment.
+
 ## GESCHÜTZTES SYSTEM — Lokales Kreativ-Studio
 
 > **LOKALES KREATIV-STUDIO — keine Credits · kein Upload · offline**
@@ -582,3 +598,99 @@ Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentatio
   OpenCode-Prüfpfad nachholen. Bei Befunden Patch korrigieren, Prüfungen und
   Review auf neuem Prüfstand wiederholen. Kein Commit, Push, Deployment oder
   Azure-Liveaufruf ausgeführt.
+
+## Nachtrag — LTX-2.5-MLX Clip-Fortsetzung und Registry-Korrektur
+
+- Datum: 2026-10-20. Task-ID: `LTX25-MLX-CONTINUATION-20261020-01`.
+  Schreiber: Codex 1. Arbeitsverzeichnis:
+  `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`.
+- `tools/ltx25_mlx_adapter.py` unterstützt jetzt `--continue-from`: FFmpeg
+  dekodiert das letzte Frame des vorherigen Clips verlustfrei als temporäres
+  PNG; der bestehende MLX-I2V-Pfad nutzt es als First-Frame-Anker und räumt es
+  nach Erfolg, Fehler oder Timeout wieder auf. `--image` und `--continue-from`
+  schließen sich aus; fehlende Eingabedateien scheitern vor Modellstart.
+- `_internal/toolkit-registry.json` verweist für `ltx2_local` nicht länger auf
+  die nicht existente Datei `tools/ltx2_local.py`, sondern auf den realen
+  Adapter. `CLAUDE.md` dokumentiert den Fortsetzungsaufruf. Gepinnter Runtime,
+  Modellgewichte und bestehende Standardparameter blieben unverändert; keine
+  Downloads, Cloud-Aufrufe, Kosten, Commits oder Pushes.
+- Verifikation: fokussiert `7 passed`; Ruff, Python-Compile, Registry-JSON und
+  `git diff --check` bestanden. Ein realer synthetischer Rot→Blau-Clip bestätigte
+  die Endframe-Dekodierung (extrahierter 1×1-RGB-Wert `0 0 255`). Ein echter
+  MLX-Render war in der Sandbox nicht möglich, weil Metal dort nicht verfügbar
+  ist. Gesamtsuite: `435 passed, 9 failed`; alle neun Fehler sind vorhandene
+  Umgebungs-/Fremdbaustellen (Node/Ollama-Status, fehlendes Media-Remote,
+  Egress-Allowlist sowie durch Sandbox blockierte Chromium-/Remotion-Starts),
+  nicht im LTX-Änderungspfad.
+- Kein unabhängiger Review durchgeführt; die Änderung ist umgesetzt und lokal
+  verifiziert, aber nicht unabhängig abgenommen.
+
+## Nachtrag — Lokale LTX-2.5-Mehrclip-Kette aktiviert
+
+- Datum: 2026-10-20. Task-ID: `LTX25-LOCAL-CHAIN-20261020-02`.
+  Schreiber: Codex 1. Branch/Worktree: `chore/ltx25-adapter` /
+  `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`.
+- `tools/chain_video.py` verwendet jetzt standardmäßig und ausschließlich den
+  vorhandenen lokalen `ltx25_mlx_adapter.py` statt des älteren Cloud-LTX-Pfads.
+  Der erste Clip erhält das gewählte Startbild; jeder Folgeclip wird direkt mit
+  `--continue-from` an den vorherigen Clip übergeben. Endframe-Dekodierung,
+  temporäre Dateien und frühe Eingabeprüfung besitzen damit nur noch eine
+  verantwortliche Implementierung im Adapter.
+- Registry und CLI-Dokumentation beschreiben den tatsächlich aktiven lokalen
+  Mehrclip-Pfad. Es wurden keine Modelle installiert, keine Cloud-Dienste
+  aufgerufen und keine Kosten, Commits oder Pushes ausgelöst.
+- Verifikation: fokussiert `9 passed`; Ruff, Python-Compile, Registry-JSON und
+  `git diff --check` bestanden. Kein echter MLX-Render, weil die Änderung nur
+  das bereits getestete Adapter-Routing betrifft und ein vollständiger Render
+  mehrere Minuten GPU-Zeit beansprucht.
+- Kein verlustbehafteter Post-Render-Pixel-Lock ergänzt: Dafür müsste jeder
+  Folgeclip vollständig neu kodiert werden. Der bereits vorhandene verlustlose
+  PNG-Anker ist die fokussierte Qualitätsverbesserung ohne zusätzliche
+  Generations- oder Transcoding-Schicht. Kein unabhängiger Review durchgeführt.
+
+## Nachtrag — LTX-Produktionsaussagen gegen Primärquellen abgegrenzt
+
+- Datum: 2026-10-20. Task-ID: `LTX-PRODUCTION-ASSESSMENT-20261020-03`.
+  Schreiber: Codex 1. Neue Dokumentation:
+  `docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`.
+- Übernommen wurden die offiziell belegten Prinzipien Open Weights, lokale
+  Inferenz sowie upstream verfügbares Standard-/IC-LoRA-Training. Der lokale
+  MLX-Adapter bleibt davon klar getrennt: LoRA-Training ist dort nicht
+  installiert oder live verifiziert.
+- Nicht als aktiver Systemstatus übernommen wurden native Alpha-Ausgabe,
+  Echtzeit auf dem M4 Pro, garantierte Final-Pixel-Qualität und das nicht über
+  offizielle Quellen bestätigte Asteria-Pilotprojekt. Der lokale Messwert von
+  rund 191 Sekunden für 97 Frames widerspricht einer Echtzeitdarstellung des
+  vorhandenen Setups.
+- Keine Runtime-, Modell-, Pipeline- oder Cloud-Änderung; keine Downloads,
+  Kosten, Commits oder Pushes. Dokumentprüfung und `git diff --check`
+  bestanden. Kein unabhängiger Review durchgeführt.
+
+### Quellenkorrektur — Alpha Gen und Layout to Render offiziell belegt
+
+- Die nachgereichten Quellen bestätigen zwei offizielle LTX-2.5-VFX-Betas:
+  Layout to Render für 3D-/Referenzvideo-geführte Frames und Alpha Gen als
+  separates RGB-zu-Graustufenmatte-IC-LoRA. Die vorherige pauschale Aussage,
+  Alpha sei nicht offiziell belegt, wurde korrigiert.
+- Weiterhin nicht zulässig ist die Behauptung, der normale lokale MP4-Adapter
+  liefere native Transparenz. Alpha Gen benötigt einen eigenen IC-LoRA-Lauf;
+  das zugangsbeschränkte Modell ist lokal nicht vorhanden und wurde im
+  gepinnten MLX-Pfad nicht live getestet. Offizielle Grenzen: maximal 145
+  Frames, maximal 1920×1088, keine Objektwahl per Prompt oder Maske.
+- Der MLX-Runtime-Quellstand besitzt grundsätzlich IC-LoRA und LoRA-Fusion,
+  was eine spätere technische Prüfung sinnvoll macht. Es erfolgten bewusst
+  kein Hugging-Face-Login, keine Lizenzannahme, kein Download und kein Render.
+
+### Systementscheidung — VFX-Module sichtbar, aber fail-closed
+
+- `ltx25_layout_to_render` wurde in der Registry als `planned` und
+  `ltx25_alpha_gen` als `blocked` erfasst. Beide Einträge besitzen konkrete
+  Aktivierungsgates; keiner ist derzeit routbar.
+- Grund: Der vorhandene MLX-IC-LoRA-Pfad unterstützt zwar LoRA-Fusion und
+  Referenzvideos, ist aber zweistufig; `--skip-stage-2` erzeugt laut lokaler
+  CLI nur halbe Auflösung. Das ist kein Nachweis für die von Alpha Gen
+  geforderte native, framegleiche Matte.
+- Aktiver Standard bleibt LTX-2.5-MLX für lokale Previsualisierung, I2V und
+  Mehrclip-Fortsetzung. Der veraltete Cloud-/Kostenstatus des Registry-Eintrags
+  `chain_video` wurde auf den bereits implementierten lokalen Adapter korrigiert.
+  Kein nutzloser Wrapper, Download oder Login wurde ergänzt.

@@ -153,12 +153,12 @@ Place your logo at:
 ```
 Configure voice settings?
 
-  1. ElevenLabs — I have a voice ID
+  1. Kokoro — local generated voice
   2. Qwen3-TTS — built-in speaker (free, self-hosted)
   3. Qwen3-TTS — voice clone (record your own voice)
   4. Skip for now (can configure later)
 
-Option 1 (ElevenLabs):
+Option 1 (Kokoro):
   Voice ID: ___
   Stability: (default: 0.75)
   Similarity boost: (default: 0.9)
@@ -243,12 +243,12 @@ Brand created: brands/{name}/
 
 Files:
   ✅ brand.json - visual identity
-  ✅ voice.json - ElevenLabs settings
+  ✅ voice.json - local voice settings
   ✅ assets/ - logo directory
 
 Next steps:
   1. Add your logo to brands/{name}/assets/logo.png
-  2. Update voice.json with your ElevenLabs voice ID
+  2. Update voice.json with the selected local provider and voice
   3. Use with /video when creating projects
 
 See docs/creating-brands.md for more details.
@@ -295,8 +295,8 @@ Typography:
   Headings: 88/72/48px bold
 
 Voice:
-  ID: configured (use ELEVENLABS_VOICE_ID env var to override)
-  Model: eleven_multilingual_v2
+  Provider and voice: configured locally in voice.json
+  Model: local provider default
 
 Assets:
   Logo: ✅ assets/logo.png

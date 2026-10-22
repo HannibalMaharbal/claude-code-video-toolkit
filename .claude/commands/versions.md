@@ -73,7 +73,7 @@ Version Check
 ## Toolkit
 
   Remotion pins: 4.0.425 across 9 projects (92 patches behind latest 4.0.518, pinned 188d ago)
-  Python: uv.lock in sync, 2 direct deps outdated (elevenlabs, boto3)
+  Python: check direct dependency versions in pyproject.toml and uv.lock
   Current: v0.18.0
   Latest:  v0.18.0
 
@@ -315,5 +315,4 @@ This command evolves through use. If something's awkward or missing:
 **Future ideas:**
 - Check Node.js version compatibility
 - Check Python tool dependencies
-- Check ElevenLabs API version
 - Automated weekly checks

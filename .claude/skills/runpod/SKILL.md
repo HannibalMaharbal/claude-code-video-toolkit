@@ -7,7 +7,7 @@ description: Cloud GPU processing via RunPod serverless. Use when setting up Run
 > direkt auf (RunPod serverless, bezahlte Jobs) und ist **DEPRECATED FROM ACTIVE
 > ROUTING** — nicht gelöscht, historische Dokumentation unverändert. **Nicht
 > automatisch ausführen.** Zwingend: Claude Router → Video-Governance-Gate (Kosten,
-> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Constantin-Freigabe.
+> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Hannibal-Freigabe.
 > Reaktivierung nur nach erneuter Prüfung (Routing §14.14). Aktive Alternativen:
 > lokal — FFmpeg (Schnitt/Stille), MLX Whisper (Transkription), Kokoro (TTS).
 
@@ -236,5 +236,5 @@ GHCR packages default to **private** — you must manually make them public for 
 - Keep `workersMin: 0` on all endpoints (scale to zero)
 - Only deploy endpoints you actively need
 - Use `workersMax=0` to disable idle endpoints without deleting them
-- Qwen3-TTS is significantly cheaper than ElevenLabs for voiceovers
+- Qwen3-TTS is available locally through the optional MLX setup; keep cloud GPU routes disabled unless separately approved
 - Check the RunPod dashboard for usage and billing

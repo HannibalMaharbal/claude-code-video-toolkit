@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Align caption timestamps to actual TTS audio via ElevenLabs Scribe.
+Align caption timestamps to local TTS audio via MLX Whisper.
 
 After voice generation, the hand-estimated cap(text, fromSec, durSec) timings
 in sprint-config.ts drift from the real speech. This tool:
 
-  1. Transcribes each scene MP3 with word-level timestamps (Scribe)
+  1. Transcribes each scene MP3 with local word-level timestamps (MLX Whisper)
   2. Fuzzy-matches each caption phrase to the word stream
   3. In --apply mode, patches cap() lines in sprint-config.ts with the
      actual fromSec / durSec derived from word boundaries
@@ -123,22 +123,27 @@ def parse_scenes(config_text: str):
 
 # ─── Scribe transcription ───────────────────────────────────
 
-def transcribe_words(audio_path: str, api_key: str, model_id: str = "scribe_v1"):
+def transcribe_words(audio_path: str, model: str = "small"):
     """Return list of word dicts: {text, start, end}."""
-    from elevenlabs.client import ElevenLabs
+    from transcribe import transcribe
 
-    client = ElevenLabs(api_key=api_key)
-    with open(audio_path, "rb") as f:
-        result = client.speech_to_text.convert(
-            file=f,
-            model_id=model_id,
-            tag_audio_events=False,
-        )
-    return [
-        {"text": w.text, "start": w.start, "end": w.end}
-        for w in result.words
-        if w.type == "word"
-    ]
+    result = transcribe(audio_path, model=model, word_timestamps=True, verbose=False)
+    if not isinstance(result, dict):
+        raise RuntimeError("Lokale MLX-Whisper-Transkription fehlgeschlagen.")
+    words = []
+    for segment in result.get("segments", []):
+        segment_words = segment.get("words") or []
+        if segment_words:
+            words.extend({"text": word.get("word", ""), "start": word["start"], "end": word["end"]}
+                         for word in segment_words)
+        else:
+            tokens = str(segment.get("text", "")).split()
+            if tokens:
+                start, end = float(segment["start"]), float(segment["end"])
+                step = (end - start) / len(tokens)
+                words.extend({"text": token, "start": start + i * step, "end": start + (i + 1) * step}
+                             for i, token in enumerate(tokens))
+    return words
 
 
 # ─── Fuzzy matching ─────────────────────────────────────────
@@ -266,7 +271,7 @@ def apply_patches(config_text: str, scenes_aligned):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Align caption timestamps to TTS audio via ElevenLabs Scribe.",
+        description="Align caption timestamps to local TTS audio via MLX Whisper.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -282,22 +287,11 @@ def main():
     )
     ap.add_argument(
         "--model",
-        default="scribe_v1",
-        choices=["scribe_v1", "scribe_v1_experimental"],
-        help="Scribe STT model",
+        default="small",
+        choices=["tiny", "small", "medium"],
+        help="Cached local MLX-Whisper model",
     )
     args = ap.parse_args()
-
-    # Load env via the toolkit's own loader if available
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
-    api_key = os.getenv("ELEVENLABS_API_KEY")
-    if not api_key:
-        print("Error: ELEVENLABS_API_KEY not set in environment or .env", file=sys.stderr)
-        sys.exit(1)
 
     config_path = Path(args.config)
     scene_dir = Path(args.scene_dir)
@@ -333,7 +327,7 @@ def main():
 
         print(f"  Aligning {stem} ({len(scene['captions'])} caps)...", file=sys.stderr)
         try:
-            words = transcribe_words(str(audio_path), api_key, model_id=args.model)
+            words = transcribe_words(str(audio_path), model=args.model)
         except Exception as e:
             print(f"    [error] transcription failed: {e}", file=sys.stderr)
             scene["captions_aligned"] = [{**c, "aligned": False} for c in scene["captions"]]

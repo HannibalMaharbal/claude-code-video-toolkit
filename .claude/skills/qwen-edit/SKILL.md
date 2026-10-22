@@ -7,7 +7,7 @@ description: AI image editing prompting patterns for Qwen-Image-Edit. Use when e
 > direkt auf (Qwen-Image-Edit-2511 via RunPod serverless) und ist **DEPRECATED FROM
 > ACTIVE ROUTING** — nicht gelöscht, historische Dokumentation unverändert. **Nicht
 > automatisch ausführen.** Zwingend: Claude Router → Video-Governance-Gate (Kosten,
-> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Constantin-Freigabe.
+> Lizenz, Datenschutz, Account, Credits) → ausdrückliche Hannibal-Freigabe.
 > Reaktivierung nur nach erneuter Prüfung (Routing §14.14). Aktive Alternative:
 > Canva (aktiv) für Bild-Finish/Freisteller; kein aktiver lokaler Cloud-Bildpfad.
 

@@ -224,7 +224,7 @@ See [multi-scene-video.md](multi-scene-video.md) if planning to make a video wit
 
 ## Voiceover
 
-See [voiceover.md](voiceover.md) for adding an AI-generated voiceover to Remotion compositions using ElevenLabs TTS.
+See [voiceover.md](voiceover.md) for adding locally generated voiceover to Remotion compositions.
 
 ## Embedding Videos
 

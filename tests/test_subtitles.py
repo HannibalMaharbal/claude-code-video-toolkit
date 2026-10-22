@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from tools.transcribe import (
+    build_script_authoritative_cues,
     build_subtitle_cues,
     burn_in_subtitles,
     validate_subtitle_cues,
@@ -64,6 +65,17 @@ def test_accepts_mlx_whisper_result_shape() -> None:
     cues = build_subtitle_cues(result)
     assert not validate_subtitle_cues(cues)
     assert json.dumps(cues)
+
+
+def test_known_script_is_authoritative_while_whisper_keeps_timing() -> None:
+    timings = [
+        {"text": "falsch erkannt", "start": 0.0, "end": 1.2},
+        {"text": "noch falsch", "start": 1.2, "end": 2.4},
+    ]
+    cues = build_script_authoritative_cues(timings, "Künstliche Intelligenz entsteht jetzt.")
+    assert " ".join(str(cue["text"]) for cue in cues) == "Künstliche Intelligenz entsteht jetzt."
+    assert cues[0]["start"] == 0.0
+    assert cues[-1]["end"] == 2.4
 
 
 def test_subtitle_file_qc_rejects_invalid_srt_structure(tmp_path: Path) -> None:

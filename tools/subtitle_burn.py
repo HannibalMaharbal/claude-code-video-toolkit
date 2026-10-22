@@ -108,6 +108,7 @@ def build_props(
             "position": style.get("position", "bottom"),
             "offsetPx": style.get("offset_px", 64),
             "backgroundBox": style.get("background_box"),
+            "safeArea": style.get("safe_area"),
         },
     }
 

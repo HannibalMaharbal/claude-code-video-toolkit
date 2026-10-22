@@ -52,7 +52,12 @@
             "continuity",
             "subtitle",
             "audio",
-            "layout"
+            "layout",
+            "frame",
+            "black_frames",
+            "freeze_frames",
+            "text_safe_area",
+            "subtitle_layout"
           ]
         },
         "status": { "enum": ["pass", "fail", "not_run", "needs_human"] },

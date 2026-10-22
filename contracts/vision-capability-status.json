@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "provider": "ollama",
+      "model": "qwen2.5vl:3b",
+      "vision_capability": "FAIL",
+      "evidence": "tests/outputs/ai-future-e2e-20260921/QWEN25VL3B_BIG_PICK_REVIEW.md"
+    }
+  ]
+}

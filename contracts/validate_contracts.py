@@ -10,6 +10,7 @@ Nutzung:
 
 Exit 0 = ok, 1 = Verstoss.
 """
+
 import hashlib
 import json
 import sys
@@ -23,6 +24,7 @@ SCHEMAS = {
     "refset": "reference-set.schema.json",
     "project": "project-manifest.schema.json",
     "layout": "layout-spec.schema.json",
+    "scene_layout": "scene-layout.schema.json",
     "routing": "task-routing.schema.json",
     "qc_verdict": "qc-verdict.schema.json",
     "platform_profiles": "platform-profiles.schema.json",
@@ -43,8 +45,10 @@ def refset_hash(members):
 
 def validate(kind, doc):
     schema = load(HERE / SCHEMAS[kind])
-    errors = [f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}"
-              for e in Draft202012Validator(schema).iter_errors(doc)]
+    errors = [
+        f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}"
+        for e in Draft202012Validator(schema).iter_errors(doc)
+    ]
     if kind == "refset" and not errors:
         if doc["set_sha256"] != refset_hash(doc["members"]):
             errors.append("set_sha256 stimmt nicht mit den Members ueberein")

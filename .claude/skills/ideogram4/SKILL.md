@@ -9,7 +9,7 @@ description: Prompting patterns for Ideogram 4 text-to-image — best-in-class i
 > nicht ins aktive Video-Routing aufgenommen. Nicht gelöscht, historische
 > Dokumentation unverändert. **Nicht automatisch ausführen.** Zwingend: Claude
 > Router → Video-Governance-Gate (Kosten, Lizenz, Datenschutz, Account, Credits) →
-> ausdrückliche Constantin-Freigabe. Reaktivierung nur nach erneuter Prüfung
+> ausdrückliche Hannibal-Freigabe. Reaktivierung nur nach erneuter Prüfung
 > (Routing §14.14). Aktive Alternative: Canva (aktiv) für Text-/Branding-Assets.
 
 # Ideogram 4 Skill

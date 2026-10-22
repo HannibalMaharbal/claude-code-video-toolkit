@@ -54,17 +54,25 @@ VOICES = {
     "bm_fable":    ("British Male",    "storytelling, warm"),
     "bm_george":   ("British Male",    "professional, trustworthy"),
     "bm_lewis":    ("British Male",    "clear, confident"),
+    "de_martin":   ("German Male",     "community fine-tune (kikiri-tts), single-speaker"),
 }
 
 DEFAULT_VOICE = "am_michael"
 MODEL_BASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 CACHE_DIR = Path.home() / ".cache" / "kokoro-onnx"
 
+# Separate community model for German — different weights (fine-tuned single-speaker
+# export), not part of the official multi-voice kokoro-v1.0.onnx + voices-v1.0.bin pack.
+DE_MODEL_REPO = "https://huggingface.co/Godelaune/Kokoro-82M-ONNX-German-Martin/resolve/main"
+DE_CACHE_DIR = CACHE_DIR / "de-martin"
+
 
 def _lang(voice: str) -> str:
     """Derive lang code from voice prefix."""
     if voice.startswith(("bf_", "bm_")):
         return "en-gb"
+    if voice == "de_martin":
+        return "de"
     return "en-us"
 
 
@@ -75,8 +83,18 @@ def _download_file(url: str, dest: Path) -> None:
     urllib.request.urlretrieve(url, dest)
 
 
-def _get_model_paths() -> tuple[str, str]:
+def _get_model_paths(voice: str = DEFAULT_VOICE) -> tuple[str, str]:
     """Download model files if needed and return (model_path, voices_path)."""
+    if voice == "de_martin":
+        DE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        model_path = DE_CACHE_DIR / "kokoro-martin.onnx"
+        voices_path = DE_CACHE_DIR / "voices-martin.npz"
+        if not model_path.exists():
+            _download_file(f"{DE_MODEL_REPO}/kokoro-martin.onnx", model_path)
+        if not voices_path.exists():
+            _download_file(f"{DE_MODEL_REPO}/voices-martin.npz", voices_path)
+        return str(model_path), str(voices_path)
+
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     model_path = CACHE_DIR / "kokoro-v1.0.onnx"
     voices_path = CACHE_DIR / "voices-v1.0.bin"
@@ -87,6 +105,11 @@ def _get_model_paths() -> tuple[str, str]:
         _download_file(f"{MODEL_BASE}/voices-v1.0.bin", voices_path)
 
     return str(model_path), str(voices_path)
+
+
+def _internal_voice_key(voice: str) -> str:
+    """Map the public --voice name to the key stored in the voices file."""
+    return "martin" if voice == "de_martin" else voice
 
 
 def _get_kokoro(model_path: str, voices_path: str):
@@ -129,7 +152,12 @@ def generate_audio(
         print(f"Warning: Unknown voice '{voice}', using '{DEFAULT_VOICE}'", file=sys.stderr)
         voice = DEFAULT_VOICE
 
-    model_cached = (CACHE_DIR / "kokoro-v1.0.onnx").exists()
+    de_martin = voice == "de_martin"
+    model_cached = (
+        (DE_CACHE_DIR / "kokoro-martin.onnx").exists()
+        if de_martin
+        else (CACHE_DIR / "kokoro-v1.0.onnx").exists()
+    )
 
     if verbose:
         vtype, vdesc = VOICES[voice]
@@ -137,12 +165,12 @@ def generate_audio(
         if not model_cached:
             print("  (First run: downloading model files ~300MB...)", file=sys.stderr)
 
-    model_path, voices_path = _get_model_paths()
+    model_path, voices_path = _get_model_paths(voice)
     kokoro = _get_kokoro(model_path, voices_path)
 
     samples, sample_rate = kokoro.create(
         text,
-        voice=voice,
+        voice=_internal_voice_key(voice),
         speed=speed,
         lang=_lang(voice),
     )
@@ -154,11 +182,14 @@ def generate_audio(
         tmp_wav = tmp.name
 
     try:
-        sf.write(tmp_wav, samples, sample_rate)
+        sf.write(tmp_wav, samples, sample_rate, subtype="PCM_24")
 
         if output_path.suffix.lower() == ".mp3":
             proc = subprocess.run(
-                ["ffmpeg", "-y", "-i", tmp_wav, "-q:a", "2", str(output_path)],
+                [
+                    "ffmpeg", "-y", "-i", tmp_wav,
+                    "-codec:a", "libmp3lame", "-q:a", "0", str(output_path),
+                ],
                 capture_output=True, text=True,
             )
             if proc.returncode != 0:
