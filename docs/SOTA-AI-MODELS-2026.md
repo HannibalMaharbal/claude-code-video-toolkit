@@ -27,6 +27,26 @@ Für lokale, grenzkostenfreie Videoerstellung (0 € Grenzkosten) stehen zwei pr
   3. Image-to-Video mit Startframe verriegeln.
   4. End-Frame für Folgeclips extrahieren (Kanonisches End-Frame = Start-Frame Gesetz).
 
+### 1.3 LTX-2.5 Kinematische Trajektorien: DEV vs. Distilled Motion Profiling
+Aus verifizierten Stresstests (identische End-Anchors, 121 Frames @ 24 fps, 1920×1088, RTX 5090) folgt: **Endpunkt-Konvergenz ist kein Beweis für Bewegungsqualität.**
+* **DEV-Pfad (40 Steps, CFG 3.5, W4A8 ConvRot):**
+  * *Stärke:* Hält lokale Workspaces und Feinkontakt (z. B. Hände, Werkzeuge, Tischflächen) ruhiger und mit weniger Raumdrift.
+  * *Einsatz:* Interaktionsszenen, Dialoge, statischere Einstellungen mit feinen Mikro-Gesten.
+* **Distilled-Pfad (Fixed Schedule / 8–12 Steps, CFG 1.0, INT8):**
+  * *Stärke:* Überlegene Re-Identifikation und Kontinuität nach Vordergrund-Okklusionen (z. B. Passanten kreuzen das Bild).
+  * *Einsatz:* Belebte Straßen- und Marktszenen, dynamische Durchquerungen.
+* **Kritische Schwachstelle beider Pfade:** Dynamisches Objekt-Binding (z. B. getragene Gegenstände wie Rettungsringe oder Taschen verändern Griff und Position). Hier sind kürzere Schnittintervalle oder Inpainting-Korrekturen zwingend.
+
+### 1.4 LTX-2.5 SDR-to-HDR IC-LoRA Pipeline (ACEScg & 10-Bit HLG Master)
+Generative In-Context LoRA Rekonstruktion zur verlustfreien Überführung von 8-Bit SDR-Material in echte 10-Bit HDR-Master:
+* **Workflow:** `ComfyUI-LTXVideo` Stage 1 (`LTX-2.5_V2V_TiledFusion_SDR_to_HDR`).
+* **Basis:** LTX-2.5 Distilled Transformer (bf16, SageAttention, 8 Distilled Steps, CFG 1.0, LoRA Stärke 1.0).
+* **Dynamikumfang:** ACEScg Scene-Linear Luminanz erreicht im 99.9. Perzentil 4.5 bis 15.8 (Peaks bis 55.0; normales SDR clippt starr bei 1.0). 1–6 % der Bildpunkte im HDR-Highlightbereich (kein Ausbrennen von Scheinwerfern/Reflexionen; Schatten behalten Karbon- und Materialtexturen).
+* **Anti-Banding-Vorschrift:**
+  * `use_tiled_encode`: **OFF** (verhindert reproduzierbare vertikale Streifen/Banding in Tiefen).
+  * `streaming encode`: **ON** (97-Frame Temporal Windows).
+* **Mastering:** Export als ACEScg Half-Float EXR-Sequenz oder HLG BT.2020 10-Bit Master zur nahtlosen Übergabe an das DaVinci Resolve Finishing Gate.
+
 ---
 
 ## 2. Lokale Bildretusche & Inpainting: Qwen Image 2.1 & Fibo 2.0
