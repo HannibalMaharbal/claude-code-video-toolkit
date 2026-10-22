@@ -175,6 +175,13 @@ def _run_ltx_draft(
     return proc.returncode
 
 
+PROVIDER_MODEL_MAP = {
+    "seedance_2_mini": "seedance_2_0_mini",
+    "seedance_2_0": "seedance_2_0",
+    "seedance_2_5": "seedance_2_5",
+}
+
+
 def _run_cloud_generation(
     model: str,
     prompt: str,
@@ -188,11 +195,12 @@ def _run_cloud_generation(
     confirm: bool = False,
 ) -> int:
     hf_video = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
+    target_model = PROVIDER_MODEL_MAP.get(model, model)
     cmd = [
         sys.executable,
         str(hf_video),
         "--model",
-        model,
+        target_model,
         "--prompt",
         prompt,
         "--output",

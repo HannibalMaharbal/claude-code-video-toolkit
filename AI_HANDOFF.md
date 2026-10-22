@@ -11,6 +11,26 @@
 
 # AI Handoff
 
+## Nachtrag — Video-Pipeline: Kaskade aus Lokal-First CAS-Schärfung, Topaz und freier Cloud-Wahl (Wan 3.0 / H3 / Higgsfield)
+
+- Datum: 2026-10-22. Schreibender Agent: Antigravity CLI (unter Hannibals direktem Auftrag). Branch/Worktree: `chore/ltx25-adapter` / `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`.
+- **Ziel & Kernentscheidung:** Umstellung der Video-Pipeline auf das optimierte Kaskadenmodell:
+  1. **Lokal-First + Topaz-Schärfung als Standard-Filter (0 € bis minimaler Verschnitt):**
+     - Basis: LTX-2.5 MLX lokal auf Mac M4 Pro (0 € Grenzkosten).
+     - Stufe 1: Automatisches lokales Apple Silicon VideoToolbox CAS 1080p Sharpening (`cas=0.6` + Lanczos-Skalierung in ~0.3s auf M4 Pro, 0,00 €).
+     - Stufe 2: Topaz Hyperion 2.5 Cloud-Sharpening via Higgsfield (`--upscale-topaz`).
+     - **Stop-Regel:** Wenn der geschärfte Clip ausreicht -> FERTIG (0 € Cloud-Spend).
+  2. **Gleichrangige Wahlfreiheit bei Cloud-Generierung (Direkt-Anbieter vs. Higgsfield):**
+     - **Direkt-Anbieter (Günstigster Rohpreis für Serie):** Wan 3.0 direkt (Alibaba Bailian, ~0,10 $/s, T2V mit Ton) & MiniMax H3 direkt (~0,13 $/s 2K, nimmt den LTX-Entwurf als V2V-Referenz).
+     - **Drittanbieter / Cloud-Hub (Higgsfield):** Bündelt Wan 3.0, MiniMax H3, Seedance 2.5, Kling und Topaz unter einem Account; liefert exklusiv das Marketing Studio, UGC Ad Multiplier (`ad_multiplier_v2`) und Soul-ID (Gesichtskonsistenz).
+     - **Seedance 2.5 (Higgsfield):** Selektiver High-End Spezialist für komplexe Multi-Image-Referenzen und Charakter-Lock.
+  3. **Neuer Dispatcher:**
+     `tools/video_generate.py` mit Zero-Accidental-Spend Schutz (`--confirm` zwingend für Bezahlmodelle).
+  4. **Aktualisierte Dokumente & Commits:**
+     - `PROJEKTE/_SYSTEM`: Commit `8666d06` (`docs/HANNIBAL-VIDEO-PIPELINE.md`, `docs/HANNIBAL-OPTIMIERTES-KI-VIDEOSYSTEM.md`, `docs/KI-SYSTEM-ROUTING.md`).
+     - `PROJEKTE/video-toolkit`: Commit `3f3354a` (`tools/video_generate.py`, `tools/gemini_tts.py`, `tests/test_gemini_tts.py`, `docs/SOTA-AI-MODELS-2026.md`).
+- **Anweisung für Claude Code & Codex:** Für alle Video-Generierungs-Aufgaben ab sofort `tools/video_generate.py` mit der Kaskaden-Logik verwenden. Bei Cloud-Generierungen stets Hannibals Bestätigung (`--confirm`) einholen und die Wahlfreiheit (Direkt vs. Higgsfield) beachten.
+
 ## Nachtrag — LTX-2.5 Qualitätsmodus quellenbasiert verifiziert
 
 - Datum: 2026-10-20. Schreibender Agent: Codex 1. Branch/Worktree:

@@ -155,6 +155,27 @@ SCENE_PRESETS = {
         "key_scale": "F Major",
         "instrumental": True,
     },
+    "suno-duet-pop": {
+        "description": "Suno v6 Duet Pop — clear vocal separation between female lead and male rapper, rich studio harmony",
+        "prompt": "Modern pop duet, crisp studio production, punchy 808s, soaring vocal harmony, clean arrangement, Warner BMG quality mastering",
+        "bpm": 115,
+        "key_scale": "A Minor",
+        "instrumental": False,
+    },
+    "studio-cinema-master": {
+        "description": "Warner/BMG Master — wide dynamic range, orchestral strings, cinematic percussion, pristine acoustics",
+        "prompt": "Hollywood cinematic orchestral score, wide dynamic range, lush string section, brass accents, subtle electronic sub-bass, studio master",
+        "bpm": 92,
+        "key_scale": "D Minor",
+        "instrumental": True,
+    },
+    "ugc-viral-hook": {
+        "description": "UGC Viral Hook — immediate punch, catchy upbeat rhythm, high engagement for Reels/Shorts",
+        "prompt": "Viral energetic TikTok sound, catchy rhythmic hook, punchy bass drop, modern synth lead, high retention and engagement",
+        "bpm": 128,
+        "key_scale": "E Minor",
+        "instrumental": True,
+    },
 }
 
 

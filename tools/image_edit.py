@@ -77,6 +77,9 @@ STYLE_PRESETS = {
     "sketch": "pencil sketch drawing style",
     "vintage": "vintage 1970s photograph with warm tones and grain",
     "cinematic": "cinematic movie still with dramatic lighting",
+    "character-sheet": "character design model sheet, turnaround angles, neutral background, consistent character design",
+    "action-figure": "collectible action figure in retail packaging box, blister pack with window, clean product photography",
+    "commercial-product": "high-end luxury commercial product photography, studio rim lighting, 8k resolution, crisp detail",
 }
 
 # Viewpoint presets
