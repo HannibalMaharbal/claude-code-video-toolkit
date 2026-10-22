@@ -145,5 +145,6 @@ Generative In-Context LoRA Rekonstruktion zur verlustfreien Überführung von 8-
 | **Cloud Video (High-End & Soul-Lock)** | Seedance 2.5 via Higgsfield | Wan 3.0 Prime |
 | **Charakter-Sheet & Key-Visual** | Nano Banana 2.1 / GPT Image 3 | GPT Image 2.5 |
 | **Lokale Bildretusche & Text-in-Image** | Qwen Image 2.1 (12 GB VRAM) | Fibo 2.0 |
+| **SDR-zu-HDR Rekonstruktion (10-Bit)** | LTX-2.5 SDR-to-HDR IC-LoRA (ComfyUI) | Topaz Hyperion 2.5 |
 | **Voiceover / Dubbing** | Gemini 3.8 Flash TTS (`gemini_tts.py`) | Kokoro TTS / Piper (lokal) |
 | **Musik & Werbe-Jingles** | Suno v6 (Warner/BMG Master) | ACE-Step 1.5 (`music_gen.py`) |
