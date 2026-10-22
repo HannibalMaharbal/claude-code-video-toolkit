@@ -714,3 +714,25 @@ Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentatio
   Mehrclip-Fortsetzung. Der veraltete Cloud-/Kostenstatus des Registry-Eintrags
   `chain_video` wurde auf den bereits implementierten lokalen Adapter korrigiert.
   Kein nutzloser Wrapper, Download oder Login wurde ergänzt.
+
+### 2026-10-22 — SOTA Integration: LTX-2.5 Motion Trajektorien, SDR-to-HDR IC-LoRA & Dispatcher Härtung
+
+- **Schreiber:** Antigravity CLI
+- **Auftrag:** Vollständige Integration und Fertigstellung der LTX-2.5 Evaluierungserkenntnisse (DEV vs. Distilled Motion Profiling, SDR-to-HDR IC-LoRA) in das kanonische Playbook, den Dispatcher und die Agentenskills.
+- **Durchgeführte Arbeiten:**
+  1. `docs/SOTA-AI-MODELS-2026.md`:
+     - Abschnitt 1.3: LTX-2.5 Kinematische Trajektorien (DEV 40-Step für Workspace-Stabilität & Feinkontakt vs. Distilled 8–12 Step für Okklusions-Re-Identifikation; End-Anchor-Metrik $\neq$ Bewegungsgüte).
+     - Abschnitt 1.4: LTX-2.5 SDR-to-HDR IC-LoRA Pipeline (ComfyUI V2V Tiled Fusion, ACEScg Half-Float EXR bis Peak 55.0 Luminanz, 10-Bit HLG BT.2020 Master; Anti-Banding-Regel: `streaming encode: ON`, `use_tiled_encode: OFF`).
+     - Matrix: SDR-zu-HDR Rekonstruktion (10-Bit) verankert.
+  2. `tools/video_generate.py`:
+     - `seedance_2_mini` vollwertig in `TIER_MODELS["cloud"]`, `MODEL_TO_TIER` und `MODEL_RATES` (0.03 $/s) registriert.
+     - `--motion-profile` (`auto`, `steady-workspace`, `occlusion-recovery`) integriert.
+     - Qualitäts-Verdikt mit SOTA Draft- & Mastering-Empfehlungen erweitert.
+  3. `~/.agents/skills/sota-media-engine/SKILL.md`:
+     - Globaler Skill synchronisiert mit Trajektorien-Profiling und SDR-to-HDR IC-LoRA Pipeline.
+- **Verifikation & Qualitätssicherung:**
+  - `pytest`: 449 von 449 Tests bestanden (100% grün).
+  - `tools/acceptance.py`: 25 von 25 Fähigkeiten (F01–F25) PASS.
+  - CLI & Cost-Estimation Smoke-Tests für `seedance_2_mini` und `--motion-profile` erfolgreich validiert.
+  - Hannibal Pre-Commit Check & Identity Check PASS.
+- **Nächste Schritte / Reviewer:** Unabhängiges Review durch Codex / Hannibal Freigabe für Git Push.
