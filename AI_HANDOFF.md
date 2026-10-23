@@ -11,6 +11,70 @@
 
 # AI Handoff
 
+## Nachtrag — Google Flow (Veo 3.1), Agent-Mode & Character-Consistency Integration
+
+- Datum: 2026-10-23. Schreibender Agent: Antigravity CLI auf direktem Nutzerauftrag ("nur die zwei sache instaliren hinzufügen villiecht das dritte auch aber es liegt an dir ob es sich loht oder liber lassen").
+- Task: Integration der 3 Kern-Erkenntnisse aus der Video-Analyse (Agent Mode, Consistent Characters, Veo 3.1 Quota-Triage):
+  1. **Sache 1 (Agent-Mode Auto-Chaining):** `tools/flow_ingest.py` um automatische `next_scene_spec`-Generierung erweitert. Das extrahierte End-Frame von Clip $N$ wird physisch als Start-Frame für Clip $N+1$ verriegelt (Kanonisches Gesetz #11: End-Frame = Start-Frame).
+  2. **Sache 2 (Consistent Characters):** `--character-ref` zu `flow_ingest.py` hinzugefügt. Kopiert und verankert Gesichts-/Outfit-Referenzen in `<project>/characters/` und verknüpft sie manifest-weit für szenenübergreifende Konsistenz.
+  3. **Sache 3 (Veo 3.1 Triage & Credit-Guard — mitgenommen, da hoher Nutzwert):** `veo_3_1_lite`, `veo_3_1_fast` und `veo_3_1_quality` in `tools/video_generate.py` registriert. Verhindert unbedachten Credit-Verbrauch durch Pre-Flight-Cost-Guards (Lite für Blocking, Fast für Iteration, Quality für finale Hero-Shots).
+- Skill-Update: `~/.agents/skills/sota-media-engine/SKILL.md` um Kapitel 6 ("Google Flow & Veo 3.1 Playbook") ergänzt.
+- Verifikation: Pytest-Suite `tests/test_flow_ingest.py` und `tests/test_chain_video.py` mit 5/5 PASS bestanden; Cost-Guards und Syntax-Validierung real verifiziert. Keinerlei unautorisierter Push/Deploy.
+
+## Nachtrag — NotebookLM Pipeline-Brücke & v0.15.6 Synchronisation
+
+- Datum: 2026-10-23. Schreibender Agent: Antigravity CLI auf direktem Nutzerauftrag ("mach alles fertig damit ich alle vorteile von nootbocklm habe").
+- Task: NotebookLM-Integration & SOTA-Video-Pipeline-Brücke.
+- Neu: `tools/notebooklm_pipeline.py` als native CLI-Brücke zwischen Google NotebookLM (`nlm` CLI) und Hannibal's Video-Toolkit.
+  - Abfrage: Zero-Halluzination-Grounding mit Quellenbelegen (`query`).
+  - Storyboard: Automatisierte Wandlung von NotebookLM-Recherchen in cineastische JSON-Storyboards (`storyboard`) nach Anti-Jump- und End-Frame = Start-Frame-Standard.
+  - Studio: Direkter Aufruf interaktiver Studio-Artefakte (Quizzes, Flashcards, Mindmaps, Reports).
+- Dokumentation: `docs/NOTEBOOKLM-OPERATING-GUIDE.md` mit Gesamt-Rating (4,9/5,0), Verifikations-Nachweis und Terminal-Befehlen angelegt.
+- Skill-Synchronisation: `nlm-skill` auf v0.15.6 über alle Agenten aktualisiert (Claude Code, Antigravity, Codex, OpenCode, Gemini CLI).
+- Reale Verifikation: Live-Abfrage an `licbarska` mit 4/4 Zitaten aus `DEAL-ARBITRAGE-PIPELINE.md` bestanden; Storyboard `output/notebooklm/storyboard_NotebookLM_licbarska_Private_Deal_Arbitrage_fuer_Ka.json` erfolgreich generiert.
+- Status: Voll einsatzbereit, 0 € Zusatzkosten, Pro-Kontingent zu 100 % frei.
+
+## Nachtrag — SeedVR2-MLX als guarded Source-Size-Restauration integriert
+
+- Datum: 2026-10-23. Schreibender Agent: Codex 1 auf direktem Nutzerauftrag
+  nach Claude-Limit. Branch/Worktree: `chore/ltx25-adapter` /
+  `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`. Kein Commit, Push oder
+  Deployment.
+- Neu: `tools/seedvr2_mlx_adapter.py` als ausschließlich lokaler, fail-closed
+  Video-Restoration-Adapter; vollständige Checkpoint-Shardprüfung, kein
+  Überschreiben, Low-RAM, Audio-Erhalt, temporale Chunks, bounded proof controls
+  und Dry-run. Tests: `tests/test_seedvr2_mlx_adapter.py` (5 PASS).
+- Modell: `AbstractFramework/seedvr2-3b-4bit` vollständig nach
+  `~/AI-Modelle/SeedVR2-MLX-4bit` geladen (2.6 GB; Transformer 2.0 GB + 85 MB,
+  VAE 475 MB). Apache-2.0, Safetensors, keine Cloud-Inferenz.
+- Reale Verifikation: Metal war außerhalb der Sandbox erreichbar und das Modell
+  wurde geladen. Der Runtime-Sicherheitscheck stoppte selbst den minimalen
+  5-Frame-/128x128-Lauf bei 6.01 GB MLX-Peak gegenüber 4.43 GB host-safe Budget.
+  `--force-unsafe-video-memory` wurde bewusst nicht verwendet. Status daher
+  **blockiert auf diesem 24-GB-Host**, nicht aktiv; bestehende CAS-/LTX-/Topaz-
+  Kaskade bleibt Produktionsroute.
+- Prüfung: neue Tests 5/5 PASS; zusammen mit LTX-Adapter 12/12 PASS; Ruff, mypy,
+  Registry-JSON und `git diff --check` PASS. Gesamtsuite: 447 PASS, 7 bekannte
+  umgebungsbedingte Fehler (Ollama gestoppt; Chromium/Remotion-Mach-Port in der
+  Sandbox verweigert), keine SeedVR2-Regression.
+- Systemaudit parallel: Governance/CLI/FFmpeg/Blender/NotebookLM OK; GitHub-CLI-
+  Token ungültig, `pi`-Befehl fehlt, Ollama/n8n/Phoenix Standby und mehrere
+  bekannte uncommittete Arbeitsstände. Keine automatische Löschung durchgeführt.
+- Nachkorrektur SeedVR2: Der vermeintliche Host-Blocker war ein selbstreferenzieller
+  Budgetfehler in `mlx-gen` 0.38.0: der Post-Chunk-Check berechnet sein Budget aus
+  dem nach Modellallokation bereits gesunkenen verfügbaren RAM. Der Adapter bietet
+  nun `--guarded-memory-override` mit arbeitslastabhängiger Zielgeometrie,
+  Chunk-Schätzung, Modellresidenz, 2 GB Systemreserve und empirischem 24x-Metal-
+  Sicherheitsfaktor. Ein realer 640x360→1280x720-2x-Test endete trotz positiver
+  Upstream-Schätzung mit Metal-OOM; deshalb ist Upscaling auf diesem 24-GB-Host
+  fail-closed gesperrt. Source-Size-Restauration ist real bis 640x352/5 Frames
+  als H.264 in 14.79 s verifiziert; ffprobe bestätigte Dimensionen, Dauer und
+  Framezahl. Der freigegebene Bereich ist hart auf 640x352, fünf Gesamt-/Chunk-
+  Frames, maximal 1 GB Cache und mindestens 13 GB verfügbaren RAM begrenzt;
+  der dynamische Plan darf strengere Grenzen setzen. 24 fokussierte SeedVR2-/
+  LTX-Tests, Ruff, Adapter-mypy, JSON und diff-check bestanden. Unabhängige
+  Endabnahme: `APPROVE`. Status: guarded operational innerhalb dieses Bereichs.
+
 ## Nachtrag — Video-Pipeline: Kaskade aus Lokal-First CAS-Schärfung, Topaz und freier Cloud-Wahl (Wan 3.0 / H3 / Higgsfield)
 
 - Datum: 2026-10-22. Schreibender Agent: Antigravity CLI (unter Hannibals direktem Auftrag). Branch/Worktree: `chore/ltx25-adapter` / `/Users/constantinbarhoumi/PROJEKTE/video-toolkit`.

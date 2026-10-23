@@ -46,15 +46,19 @@ MODE_FLAGS = {
 
 _CONTINUITY_SUFFIX = (
     " Keep one continuous physical scene with the same subject, physical set, "
-    "wardrobe, and props. Keep lighting direction and color temperature constant. "
+    "wardrobe, and props. Keep lighting direction and color temperature constant across every shot. "
     "Use smooth motivated camera movement and natural micro-movements with visible "
-    "environmental motion. Preserve coherent physics and temporal continuity: no "
+    "environmental motion, settling smoothly. Preserve coherent physics and temporal continuity: no "
     "spatial teleportation, disjointed cuts, identity drift, morphing, flicker, or "
     "frozen frames."
 )
 _IMAGE_SUFFIX = (
     " Preserve the reference image's identity, composition, materials, and geometry "
     "as the locked visual starting point."
+)
+_KEYFRAME_SUFFIX = (
+    " Transition smoothly from the initial frame to the target end frame without "
+    "drifting or jarring morphs."
 )
 
 
@@ -111,7 +115,10 @@ def generate_video(
     frame_rate: int = 24,
     seed: int | None = None,
     image: str | None = None,
+    end_image: str | None = None,
     continue_from: str | None = None,
+    lora: str | None = None,
+    lora_strength: float = 1.0,
     verbose: bool = True,
 ) -> dict:
     if image and continue_from:
@@ -121,6 +128,8 @@ def generate_video(
         }
     if image and not Path(image).is_file():
         return {"success": False, "error": f"Eingabebild fehlt: {image}"}
+    if end_image and not Path(end_image).is_file():
+        return {"success": False, "error": f"Endbild fehlt: {end_image}"}
     if continue_from and not Path(continue_from).is_file():
         return {"success": False, "error": f"Fortsetzungsvideo fehlt: {continue_from}"}
     if mode not in MODE_FLAGS:
@@ -175,8 +184,10 @@ def generate_video(
             }
         image = str(anchor_path)
 
-    task = "image-to-video" if image else "text-to-video"
-    enhanced_prompt = enhance_ltx_prompt(prompt, image=bool(image))
+    task = "keyframe-interpolation" if (image and end_image) else ("image-to-video" if (image or end_image) else "text-to-video")
+    enhanced_prompt = enhance_ltx_prompt(prompt, image=bool(image or end_image))
+    if end_image and _KEYFRAME_SUFFIX.strip() not in enhanced_prompt:
+        enhanced_prompt += _KEYFRAME_SUFFIX
 
     cmd = [
         uv, "run", "ltx-2-mlx", "generate",
@@ -190,8 +201,15 @@ def generate_video(
         "--frame-rate", str(frame_rate),
         "--output", str(output_path),
     ]
-    if image:
+    if image and end_image:
+        cmd += ["--image", image, "0", "1.0", "--image", end_image, str(frames - 1), "1.0"]
+    elif image:
         cmd += ["--image", image]
+    elif end_image:
+        cmd += ["--image", end_image, str(frames - 1), "1.0"]
+
+    if lora:
+        cmd += ["--lora", str(lora), str(lora_strength)]
     if seed is not None:
         cmd += ["--seed", str(seed)]
     if mode == "two-stage":
@@ -251,6 +269,8 @@ def generate_video(
         "seed": seed,
         "prompt_enhanced": True,
         "continuation_source": continuation_source,
+        "end_image": end_image,
+        "lora": lora,
         "inference_time_ms": elapsed_ms,
     }
 
@@ -268,12 +288,28 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--image", default=None)
     parser.add_argument(
+        "--end-image",
+        default=None,
+        help="Ziel-Endbild für Keyframe-Sandwich (Frame N-1 Verankerung)",
+    )
+    parser.add_argument(
         "--continue-from",
         default=None,
         help=(
             "Vorherigen Clip fortsetzen; dessen letztes Frame wird automatisch "
             "als I2V-Anker verwendet."
         ),
+    )
+    parser.add_argument(
+        "--lora",
+        default=None,
+        help="Pfad zu LoRA-Datei (.safetensors) oder HF-Repo ID",
+    )
+    parser.add_argument(
+        "--lora-strength",
+        type=float,
+        default=1.0,
+        help="LoRA-Stärke (Standard: 1.0)",
     )
     parser.add_argument("--seed", type=int, default=None)
     args = parser.parse_args()
@@ -288,7 +324,10 @@ def main() -> None:
         frame_rate=args.frame_rate,
         seed=args.seed,
         image=args.image,
+        end_image=args.end_image,
         continue_from=args.continue_from,
+        lora=args.lora,
+        lora_strength=args.lora_strength,
     )
     print(json.dumps(result))
     if not result.get("success"):

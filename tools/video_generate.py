@@ -45,17 +45,25 @@ TIER_MODELS = {
     },
     "cloud": {
         "default": "wan3_0",
-        "models": ["wan3_0", "wan3_0_prime", "minimax_h3", "minimax_h3_max", "seedance_2_mini"],
+        "models": [
+            "wan3_0",
+            "wan3_0_prime",
+            "minimax_h3",
+            "minimax_h3_max",
+            "seedance_2_mini",
+            "veo_3_1_lite",
+            "veo_3_1_fast",
+        ],
         "cost_per_sec": 0.10,  # ~0.10 $/s for Wan 3.0, ~0.13 $/s for H3 2K, ~0.03 $/s for Seedance 2 Mini
         "locality": "cloud",
-        "description": "Economic Cloud Workhorse (Wan 3.0, MiniMax H3, Seedance 2 Mini via Higgsfield)",
+        "description": "Economic Cloud Workhorse (Wan 3.0, MiniMax H3, Seedance 2 Mini, Google Flow Veo 3.1 Lite/Fast)",
     },
     "premium": {
         "default": "seedance_2_5",
-        "models": ["seedance_2_5", "seedance_2_0"],
+        "models": ["seedance_2_5", "seedance_2_0", "veo_3_1_quality"],
         "cost_per_sec": 0.30,  # ~0.25 - 0.40 $/s
         "locality": "cloud",
-        "description": "Higgsfield Marketing Studio & Selective High-End (Seedance 2.5 für Multi-Ref & Soul-ID)",
+        "description": "Higgsfield Marketing Studio, Seedance 2.5 & Google Flow Veo 3.1 Quality (Selective High-End)",
     },
     "upscale": {
         "default": "topaz_hyperion_2_5",
@@ -73,6 +81,9 @@ MODEL_TO_TIER = {
     "minimax_h3": "cloud",
     "minimax_h3_max": "cloud",
     "seedance_2_mini": "cloud",
+    "veo_3_1_lite": "cloud",
+    "veo_3_1_fast": "cloud",
+    "veo_3_1_quality": "premium",
     "seedance_2_5": "premium",
     "seedance_2_0": "premium",
     "topaz_hyperion_2_5": "upscale",
@@ -83,6 +94,9 @@ MODEL_TO_TIER = {
 # Specific model overrides for rates
 MODEL_RATES = {
     "seedance_2_mini": 0.03,  # ~10x cost reduction compared to Seedance 2.5
+    "veo_3_1_lite": 0.02,     # Economic / Daily Free Tier rate
+    "veo_3_1_fast": 0.08,     # Rapid standard iteration
+    "veo_3_1_quality": 0.25,  # High-fidelity 4K master tier
 }
 
 
@@ -151,7 +165,10 @@ def _run_ltx_draft(
     prompt: str,
     output_path: str,
     image: str | None = None,
+    end_image: str | None = None,
     continue_from: str | None = None,
+    lora: str | None = None,
+    lora_strength: float = 1.0,
     frames: int = 97,
     fps: int = 24,
     mode: str = "two-stage",
@@ -173,8 +190,12 @@ def _run_ltx_draft(
     ]
     if image:
         cmd += ["--image", image]
+    if end_image:
+        cmd += ["--end-image", end_image]
     if continue_from:
         cmd += ["--continue-from", continue_from]
+    if lora:
+        cmd += ["--lora", lora, "--lora-strength", str(lora_strength)]
 
     print(f"[1. Lokal-First] Inferenz via LTX-2.5 MLX (0 € Grenzkosten)...", file=sys.stderr)
     proc = subprocess.run(cmd)
@@ -200,11 +221,15 @@ def _run_cloud_generation(
     aspect_ratio: str | None = None,
     confirm: bool = False,
 ) -> int:
-    hf_video = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
+    if provider == "direct":
+        provider_script = TOOLKIT_ROOT / "tools" / "direct_video_provider.py"
+    else:
+        provider_script = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
+
     target_model = PROVIDER_MODEL_MAP.get(model, model)
     cmd = [
         sys.executable,
-        str(hf_video),
+        str(provider_script),
         "--model",
         target_model,
         "--prompt",
@@ -226,6 +251,12 @@ def _run_cloud_generation(
     if ref_video:
         print(
             f"[Reference Guidance] Verwende LTX-Vorlage '{ref_video}' als Bewegungsanker für {model}.",
+            file=sys.stderr,
+        )
+
+    if model.startswith("veo_3_1"):
+        print(
+            f"[Google Flow / Veo 3.1] Dispatching model tier '{model}' (Agent Mode & Frame-Locking ready).",
             file=sys.stderr,
         )
 
@@ -283,6 +314,9 @@ def main() -> int:
     parser.add_argument("--prompt", "-p", required=True, help="Text prompt for video generation")
     parser.add_argument("--output", "-o", required=True, help="Output MP4 file path")
     parser.add_argument("--image", "-i", help="Reference starting image (for Image-to-Video)")
+    parser.add_argument("--end-image", help="Target end image for sandwich keyframing (locks frame N-1)")
+    parser.add_argument("--lora", help="Path to LoRA safetensors file or HF repo ID")
+    parser.add_argument("--lora-strength", type=float, default=1.0, help="LoRA strength (default: 1.0)")
     parser.add_argument(
         "--ref-video",
         help="Reference draft video (e.g. 5s LTX draft) used to guide motion & composition in cloud re-render",
@@ -361,7 +395,10 @@ def main() -> int:
             prompt=args.prompt,
             output_path=args.output,
             image=args.image,
+            end_image=args.end_image,
             continue_from=args.continue_from,
+            lora=args.lora,
+            lora_strength=args.lora_strength,
             frames=frames,
         )
         if rc != 0:

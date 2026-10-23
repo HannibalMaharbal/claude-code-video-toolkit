@@ -123,7 +123,7 @@ This is especially critical for background commands where the working directory 
 |------|-------|-------------|
 | **Project tools** | voiceover, music, music_gen, sfx, sync_timing | During video creation workflow |
 | **Utility tools** | redub, addmusic, notebooklm_brand, locate_watermark | Quick transformations on existing videos |
-| **Free local** | transcribe, kokoro_tts, piper_tts, local_voice, redub, z_image, ltx2_local, subtitle_translate (`--engine argos`) | Local transcription (mlx-whisper), TTS (Kokoro/Piper), consent-gated Qwen3-TTS cloning/dubbing, image/video generation and offline translation — Apple Silicon, no API key |
+| **Free local** | transcribe, kokoro_tts, piper_tts, local_voice, redub, z_image, ltx2_local, seedvr2_mlx_adapter, subtitle_translate (`--engine argos`) | Local transcription (mlx-whisper), TTS (Kokoro/Piper), consent-gated Qwen3-TTS cloning/dubbing, image/video generation, video restoration/upscaling and offline translation — Apple Silicon, no API key |
 | **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | Optional external GPU processing; provider pricing and usage limits must be checked before use. The local `local_voice`/`redub` path does not use this cloud tool. |
 | **Cloud, low-cost** | gemini_tts, subtitle_translate (default engine) | Google Gemini API — rate-limited free tier + cheap paid tier; NOT local, NOT unconditionally free |
 | **Cloud, paid** | higgsfield_video | Higgsfield CLI video generation — always cost-gated, shows credits before spending |
@@ -360,6 +360,45 @@ The official Lightricks LTX-2.5 stack recommends DFR for production quality, but
 Verified with a live test generation before being marked active in the registry (2026-09-26): 704×448, 97 frames (4.0s), `--distilled --low-ram` on M4 Pro / 24GB RAM — **190.7s render time**. The audio track carries real synchronized speech generated purely from the prompt text: MLX Whisper transcribed the target German phrase back out of the rendered clip at 94-97% word confidence.
 
 **Known limitation:** the model does not reliably honor camera-facing / "looks into the camera" framing instructions in the prompt — review the actual output frames before relying on visible lip-sync. Frame count must be `8k+1` (25, 49, 97, …); height/width must be divisible by 32.
+
+### SeedVR2-MLX (Standalone, local video restoration)
+
+Free, offline video restoration on Apple Silicon through the local
+4-bit SeedVR2 3B checkpoint. The adapter preserves audio by default, applies
+temporally overlapping chunks, refuses incomplete weights and never overwrites
+an existing output.
+
+```bash
+# Guarded source-size restoration (verified envelope: up to 640x352, five frames)
+python tools/seedvr2_mlx_adapter.py --input soft.mp4 --output proof-restored.mp4 \
+  --temporal-chunk-size 5 --temporal-chunk-overlap 4 --max-frames 5 \
+  --guarded-memory-override
+
+# Validate the exact local command without inference
+python tools/seedvr2_mlx_adapter.py --input soft.mp4 --output restored.mp4 \
+  --dry-run --json
+```
+
+Runtime entry point: `mflux-upscale-seedvr2` from the locally installed
+`mlx-gen`. Weights: `~/AI-Modelle/SeedVR2-MLX-4bit`. Defaults are conservative
+for a 24 GB Mac: `1x`, wavelet color correction, low-RAM mode, 1 GB MLX cache,
+49-frame temporal chunks and 16-frame overlap.
+
+`mlx-gen` 0.38.0 recalculates its post-chunk budget from RAM availability after
+model allocation, causing a false rejection even when the host had sufficient
+headroom. Because its unsafe flag disables upstream runtime limits, this adapter
+reproduces the upstream workload estimator before launch, adds measured model
+residency, a 2 GB system reserve and a conservative 24x Metal calibration factor.
+The factor is based on a real 640x360→1280x720 OOM that exposed severe upstream
+underestimation. Upscaling above source size is therefore blocked on this 24 GB
+host; source-size restoration is allowed only when the complete workload-specific
+budget fits and remains within the verified 640x352/5-frame envelope. Guarded
+mode requires an explicit `--max-frames` of at most 5 and caps MLX cache at 1 GB.
+The stricter of the dynamic plan and the empirically verified 13 GB available-RAM
+floor always applies.
+Live Metal verification on 2026-10-23 produced valid 5-frame H.264
+outputs at 128x128 and 640x352; the latter completed in 14.79 seconds. Retain the
+CAS/LTX/Topaz cascade for upscaling or when the preflight refuses execution.
 
 ### Higgsfield Video (Cloud, paid, cost-gated)
 

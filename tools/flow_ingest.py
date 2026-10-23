@@ -109,6 +109,9 @@ def ingest_flow_clip(
     project_dir: Path,
     scene_number: Optional[int] = None,
     extract_lock_frame: bool = True,
+    character_ref: Optional[Path] = None,
+    model_tier: str = "veo_3_1_fast",
+    prompt: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ingest a Google Flow clip into a video-toolkit project structure.
@@ -116,6 +119,7 @@ def ingest_flow_clip(
     Structure:
       <project_dir>/raw_clips/
       <project_dir>/chain_frames/
+      <project_dir>/characters/
       <project_dir>/flow_manifest.json
     """
     if not input_file.exists():
@@ -124,8 +128,10 @@ def ingest_flow_clip(
     project_dir.mkdir(parents=True, exist_ok=True)
     raw_dir = project_dir / "raw_clips"
     chain_dir = project_dir / "chain_frames"
+    chars_dir = project_dir / "characters"
     raw_dir.mkdir(exist_ok=True)
     chain_dir.mkdir(exist_ok=True)
+    chars_dir.mkdir(exist_ok=True)
 
     meta = get_video_metadata(input_file)
 
@@ -141,16 +147,35 @@ def ingest_flow_clip(
     result: Dict[str, Any] = {
         "scene_index": idx,
         "clip_path": str(target_clip),
+        "model_tier": model_tier,
+        "prompt": prompt,
         "metadata": meta,
+        "character_ref": None,
         "end_frame": None,
+        "next_scene_spec": None,
         "status": "INGESTED",
     }
 
+    # Handle Character Consistency Reference
+    if character_ref and character_ref.exists():
+        import shutil
+        target_char_ref = chars_dir / f"character_{character_ref.name}"
+        if character_ref.resolve() != target_char_ref.resolve():
+            shutil.copy2(character_ref, target_char_ref)
+        result["character_ref"] = str(target_char_ref)
+
+    # End-Frame = Start-Frame Locking (Agent Mode)
     if extract_lock_frame and meta.get("has_video"):
         end_frame_path = chain_dir / f"scene_{idx:02d}_endframe.png"
         try:
             extracted = extract_end_frame(target_clip, end_frame_path)
             result["end_frame"] = str(extracted)
+            result["next_scene_spec"] = {
+                "next_scene_index": idx + 1,
+                "input_start_frame": str(extracted),
+                "continuity_rule": "End-Frame = Start-Frame verriegelt (No Spatial Teleportation / No Cuts)",
+                "camera_rule": "Ausschließlich Kamera ändert Winkel/Einstellungsgröße. Licht & Motiv bleiben gelockt.",
+            }
         except Exception as e:
             result["end_frame_error"] = str(e)
 
@@ -182,11 +207,15 @@ def main():
     parser.add_argument("input", type=str, help="Path to downloaded Flow clip or file")
     parser.add_argument("--project", "-p", type=str, default="projects/flow-production", help="Project directory")
     parser.add_argument("--scene", "-s", type=int, default=None, help="Scene number")
+    parser.add_argument("--character-ref", "-c", type=str, default=None, help="Path to character reference image (Consistency Lock)")
+    parser.add_argument("--tier", "-t", type=str, default="veo_3_1_fast", choices=["veo_3_1_lite", "veo_3_1_fast", "veo_3_1_quality"], help="Veo 3.1 Model Tier used")
+    parser.add_argument("--prompt", type=str, default=None, help="Prompt text used for generation")
     parser.add_argument("--no-frame-lock", action="store_true", help="Skip extracting end frame")
     args = parser.parse_args()
 
     input_path = Path(args.input)
     project_path = Path(args.project)
+    char_ref_path = Path(args.character_ref) if args.character_ref else None
 
     try:
         res = ingest_flow_clip(
@@ -194,6 +223,9 @@ def main():
             project_dir=project_path,
             scene_number=args.scene,
             extract_lock_frame=not args.no_frame_lock,
+            character_ref=char_ref_path,
+            model_tier=args.tier,
+            prompt=args.prompt,
         )
         print(json.dumps(res, indent=2))
     except Exception as e:

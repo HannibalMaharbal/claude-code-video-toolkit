@@ -659,6 +659,30 @@
       "verified": "Live test generation confirmed working 2026-09-26: 704x448, 97 frames, --distilled --low-ram on M4 Pro 24GB RAM, 190.7s render time. Audio track contains real synchronized speech — MLX Whisper transcribed the target German phrase back out at 94-97% word confidence. Known limitation: camera-facing / \"looks into camera\" framing instructions are not reliably honored — review output frames before relying on visible lip-sync.",
       "created": "2026-09-26"
     },
+    "seedvr2_local": {
+      "path": "tools/seedvr2_mlx_adapter.py",
+      "description": "Free local SeedVR2 3B 4-bit source-size video restoration with workload-specific Metal memory gating and audio preservation",
+      "usage": "python tools/seedvr2_mlx_adapter.py --input soft.mp4 --output proof-restored.mp4 --resolution 1x --temporal-chunk-size 5 --temporal-chunk-overlap 4 --max-frames 5 --guarded-memory-override",
+      "status": "guarded operational inside the live-verified source-size envelope up to 640x352/5 frames; upscaling blocked on the 24 GB host",
+      "category": "video-enhancement",
+      "backend": "mflux-upscale-seedvr2 via mlx-gen + local AbstractFramework/seedvr2-3b-4bit checkpoint",
+      "requires": "Apple Silicon Metal; no API key or cloud account",
+      "env_vars": [],
+      "options": {
+        "--resolution": "1x/source-size or smaller; output larger than the source is blocked on this 24 GB host",
+        "--softness": "0.0-1.0; default 0.0",
+        "--color-correction": "wavelet (default) | lab | off",
+        "--temporal-chunk-size": "default 49; must be 4n+1",
+        "--temporal-chunk-overlap": "default 16; must be smaller than chunk size and divisible by 4",
+        "--mlx-cache-limit-gb": "default and maximum 1.0 in guarded mode",
+        "--start-seconds/--max-frames": "bounded proof-run controls",
+        "--guarded-memory-override": "requires explicit max-frames <=5, output <=640x352 and at least 13 GB available RAM; workload-specific preflight may require more using target geometry, model residency, 2 GB reserve and a 24x Metal safety factor",
+        "--dry-run": "validate local assets and emit the command without inference"
+      },
+      "estimatedCost": "$0 local marginal cost",
+      "verified": "Complete 2.6 GB checkpoint and guarded adapter verified 2026-10-23. Valid H.264 source-size runs: 128x128/5 frames in 2.37s and 640x352/5 frames in 14.79s. A real 640x360 to 1280x720 2x attempt hit Metal OOM, so all upscaling is blocked and the preflight applies a conservative 24x empirical factor to mlx-gen's underestimated working set.",
+      "created": "2026-10-23"
+    },
     "ltx25_layout_to_render": {
       "path": null,
       "description": "Planned local LTX-2.5 IC-LoRA workflow guided by a 3D blocking/reference video for camera, composition, and motion control",

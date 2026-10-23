@@ -150,3 +150,97 @@ def test_missing_image_fails_before_runtime_lookup(tmp_path):
 
     assert result["success"] is False
     assert "Eingabebild fehlt" in result["error"]
+
+
+def test_missing_end_image_fails_before_runtime(tmp_path):
+    result = ltx.generate_video(
+        "Animate with sandwich keyframes.",
+        str(tmp_path / "out.mp4"),
+        end_image=str(tmp_path / "missing_end.png"),
+        verbose=False,
+    )
+
+    assert result["success"] is False
+    assert "Endbild fehlt" in result["error"]
+
+
+def test_end_image_anchors_first_and_last_frames(tmp_path):
+    start_img = tmp_path / "start.png"
+    start_img.write_bytes(b"start-frame")
+    end_img = tmp_path / "end.png"
+    end_img.write_bytes(b"end-frame")
+
+    output = tmp_path / "sandwich.mp4"
+    runtime = tmp_path / "runtime"
+    model = tmp_path / "model"
+    runtime.mkdir()
+    model.mkdir()
+
+    calls = []
+
+    def completed(cmd, **kwargs):
+        calls.append(cmd)
+        output.write_bytes(b"video")
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch.object(ltx.shutil, "which", return_value="/usr/bin/uv"),
+        patch.object(ltx, "RUNTIME_DIR", runtime),
+        patch.object(ltx, "MODEL_PATH", model),
+        patch.object(ltx.subprocess, "run", side_effect=completed),
+    ):
+        result = ltx.generate_video(
+            "Interpolate smoothly between poses.",
+            str(output),
+            image=str(start_img),
+            end_image=str(end_img),
+            frames=97,
+            verbose=False,
+        )
+
+    assert result["success"] is True
+    cmd = calls[0]
+    # Check anchor pairs: start at 0, end at frames - 1 (96)
+    assert "--image" in cmd
+    idx1 = cmd.index("--image")
+    assert cmd[idx1 : idx1 + 4] == ["--image", str(start_img), "0", "1.0"]
+    idx2 = cmd.index("--image", idx1 + 1)
+    assert cmd[idx2 : idx2 + 4] == ["--image", str(end_img), "96", "1.0"]
+    prompt = cmd[cmd.index("--prompt") + 1]
+    assert "Transition smoothly from the initial frame to the target end frame" in prompt
+
+
+def test_lora_flag_passed_to_command(tmp_path):
+    output = tmp_path / "lora_clip.mp4"
+    runtime = tmp_path / "runtime"
+    model = tmp_path / "model"
+    runtime.mkdir()
+    model.mkdir()
+
+    calls = []
+
+    def completed(cmd, **kwargs):
+        calls.append(cmd)
+        output.write_bytes(b"video")
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch.object(ltx.shutil, "which", return_value="/usr/bin/uv"),
+        patch.object(ltx, "RUNTIME_DIR", runtime),
+        patch.object(ltx, "MODEL_PATH", model),
+        patch.object(ltx.subprocess, "run", side_effect=completed),
+    ):
+        result = ltx.generate_video(
+            "A cinematic car shot.",
+            str(output),
+            lora="Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate",
+            lora_strength=0.85,
+            verbose=False,
+        )
+
+    assert result["success"] is True
+    cmd = calls[0]
+    assert "--lora" in cmd
+    idx = cmd.index("--lora")
+    assert cmd[idx : idx + 3] == ["--lora", "Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate", "0.85"]
+
