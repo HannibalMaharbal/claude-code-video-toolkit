@@ -1,0 +1,2 @@
+# False positive: Funktionsargument args.lock_key, kein Secret (geprüft 2026-10-24)
+4412062202b820f7df60882441c1ebdcca8fbd7e:tools/reference_registry.py:generic-api-key:218
