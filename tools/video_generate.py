@@ -44,19 +44,20 @@ TIER_MODELS = {
         "description": "Local LTX-2.5 MLX + VideoToolbox CAS (0 € Grenzkosten, Scrap-Filter)",
     },
     "cloud": {
-        "default": "wan3_0",
+        "default": "seedance_2_mini",
         "models": [
-            "wan3_0",
-            "wan3_0_prime",
+            "seedance_2_mini",
+            "kling_4_0",
             "minimax_h3",
             "minimax_h3_max",
-            "seedance_2_mini",
+            "wan3_0",
+            "wan3_0_prime",
             "veo_3_1_lite",
             "veo_3_1_fast",
         ],
-        "cost_per_sec": 0.10,  # ~0.10 $/s for Wan 3.0, ~0.13 $/s for H3 2K, ~0.03 $/s for Seedance 2 Mini
+        "cost_per_sec": 0.05,  # ~0.03 $/s for Seedance 2 Mini, ~0.05 $/s for Kling 4.0
         "locality": "cloud",
-        "description": "Economic Cloud Workhorse (Wan 3.0, MiniMax H3, Seedance 2 Mini, Google Flow Veo 3.1 Lite/Fast)",
+        "description": "Economic Cloud Workhorse (Seedance Mini, Kling 4.0, H3 via Higgsfield)",
     },
     "premium": {
         "default": "seedance_2_5",
@@ -76,6 +77,7 @@ TIER_MODELS = {
 
 MODEL_TO_TIER = {
     "ltx25": "draft",
+    "kling_4_0": "cloud",
     "wan3_0": "cloud",
     "wan3_0_prime": "cloud",
     "minimax_h3": "cloud",
@@ -93,6 +95,7 @@ MODEL_TO_TIER = {
 
 # Specific model overrides for rates
 MODEL_RATES = {
+    "kling_4_0": 0.05,        # Kling 4.0 via Higgsfield (Economic tier)
     "seedance_2_mini": 0.03,  # ~10x cost reduction compared to Seedance 2.5
     "veo_3_1_lite": 0.02,     # Economic / Daily Free Tier rate
     "veo_3_1_fast": 0.08,     # Rapid standard iteration
@@ -209,6 +212,7 @@ def _run_ltx_draft(
 
 
 PROVIDER_MODEL_MAP = {
+    "kling_4_0": "kling-video/v4.0/text-to-video",
     "seedance_2_mini": "seedance_2_0_mini",
     "seedance_2_0": "seedance_2_0",
     "seedance_2_5": "seedance_2_5",
@@ -233,6 +237,9 @@ def _run_cloud_generation(
         provider_script = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
 
     target_model = PROVIDER_MODEL_MAP.get(model, model)
+    if model == "kling_4_0" and image:
+        target_model = "kling-video/v4.0/image-to-video"
+
     cmd = [
         sys.executable,
         str(provider_script),
