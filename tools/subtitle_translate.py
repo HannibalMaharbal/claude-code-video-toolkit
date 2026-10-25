@@ -30,7 +30,7 @@ from pathlib import Path
 
 DEFAULT_ENGINE = "argos"
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
-DEFAULT_OLLAMA_MODEL = "devstral-small-2:latest"  # gemma-code:latest removed locally 2026-09-26; verify with `ollama list` before relying on this default
+DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:14b"
 DEFAULT_SOURCE_LANGUAGE = "de"  # dieses Projekt ist primaer deutschsprachig; nur fuer --engine argos relevant
 MARKER = re.compile(r"<translation>\s*(.*?)\s*</translation>", re.DOTALL | re.IGNORECASE)
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
@@ -179,9 +179,23 @@ def _translate_argos(text: str, source_language: str, target_language: str) -> s
     return result.strip()
 
 
-def _translate(text: str, target_language: str, model: str, engine: str, source_language: str = DEFAULT_SOURCE_LANGUAGE) -> str:
+def _translate(
+    text: str,
+    target_language: str,
+    model: str,
+    engine: str,
+    source_language: str = DEFAULT_SOURCE_LANGUAGE,
+) -> str:
     if engine == "argos":
-        return _translate_argos(text, source_language, target_language)
+        try:
+            return _translate_argos(text, source_language, target_language)
+        except Exception as e:
+            print(
+                f"[Subtitle Translate] Argos fehlgeschlagen ({e}), "
+                f"nutze lokalen Ollama Fallback ({DEFAULT_OLLAMA_MODEL})...",
+                file=sys.stderr,
+            )
+            return _translate_ollama(text, target_language, DEFAULT_OLLAMA_MODEL)
     elif engine == "ollama":
         return _translate_ollama(text, target_language, model)
     elif engine == "gemini":

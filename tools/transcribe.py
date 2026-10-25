@@ -416,7 +416,10 @@ def transcribe(
         print(f"Error: File not found: {input_path}", file=sys.stderr)
         return None
 
-    model_id = f"mlx-community/whisper-{model}-mlx"
+    if model in ("large-v3-turbo", "turbo"):
+        model_id = "mlx-community/whisper-large-v3-turbo"
+    else:
+        model_id = f"mlx-community/whisper-{model}-mlx"
     if verbose:
         print(f"Transcribing with {model_id}...", file=sys.stderr)
 

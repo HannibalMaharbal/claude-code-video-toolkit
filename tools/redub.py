@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from local_voice import generate_audio
-from subtitle_translate import _normalize_argos_lang, _translate_argos
+from subtitle_translate import _normalize_argos_lang, _translate, _translate_argos
 from transcribe import transcribe
 
 WHISPER_MODELS = ("tiny", "small", "medium")
@@ -49,6 +49,7 @@ def dub_video(
     target_language: str,
     whisper_model: str,
     consent_confirmed: bool,
+    preserve_bg: bool = True,
 ) -> dict:
     if not consent_confirmed:
         raise ValueError("Voice cloning benötigt --consent-confirmed für die Referenzstimme.")
@@ -84,7 +85,9 @@ def dub_video(
             start, end = float(segment["start"]), float(segment["end"])
             if not text or start < 0 or end <= start or end > duration + 0.25:
                 continue
-            translated = _translate_argos(text, source_language, target_language)
+            translated = _translate(
+                text, target_language, "qwen2.5-coder:14b", "argos", source_language
+            )
             clip_path = temp / f"segment-{index:04d}.wav"
             result = generate_audio(
                 text=translated, output_path=clip_path, ref_audio=ref_audio,
@@ -121,12 +124,28 @@ def dub_video(
             "-filter_complex", ";".join(filters), "-map", "[dub]",
             "-ar", "24000", "-ac", "1", "-c:a", "pcm_s24le", str(dub_audio),
         ])
-        _run([
-            "ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(source),
-            "-i", str(dub_audio), "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{duration:.3f}",
-            "-movflags", "+faststart", str(output),
-        ])
+        if preserve_bg:
+            filter_complex = (
+                "[0:a]volume=0.35,aresample=48000[orig_bg];"
+                "[1:a]aresample=48000,asplit=2[voice_mix][voice_side];"
+                "[orig_bg][voice_side]sidechaincompress=threshold=0.02:ratio=5:attack=30:release=400[ducked_bg];"
+                "[ducked_bg][voice_mix]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
+            )
+            _run([
+                "ffmpeg", "-nostdin", "-y", "-v", "error",
+                "-i", str(source), "-i", str(dub_audio),
+                "-filter_complex", filter_complex,
+                "-map", "0:v:0", "-map", "[aout]",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                "-t", f"{duration:.3f}", "-movflags", "+faststart", str(output),
+            ])
+        else:
+            _run([
+                "ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(source),
+                "-i", str(dub_audio), "-map", "0:v:0", "-map", "1:a:0",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", f"{duration:.3f}",
+                "-movflags", "+faststart", str(output),
+            ])
 
     return {
         "success": True,
@@ -134,11 +153,12 @@ def dub_video(
         "segments": len(clips),
         "source_language": source_language,
         "target_language": target_language,
-        "translation_engine": "argos-local",
+        "translation_engine": "argos-or-ollama-qwen2.5",
         "tts_model": "mlx-community/Qwen3-TTS-12Hz-0.6B-Base-bf16",
         "local_only": True,
         "consent_confirmed": True,
-        "source_audio_replaced": True,
+        "source_audio_replaced": not preserve_bg,
+        "bg_preserved": preserve_bg,
     }
 
 
@@ -152,6 +172,11 @@ def main() -> int:
     parser.add_argument("--target-language", default="German")
     parser.add_argument("--whisper-model", choices=WHISPER_MODELS, default="small")
     parser.add_argument("--consent-confirmed", action="store_true")
+    parser.add_argument(
+        "--replace-audio",
+        action="store_true",
+        help="Completely replace original audio instead of preserving/ducking background music",
+    )
     args = parser.parse_args()
     try:
         result = dub_video(
@@ -159,6 +184,7 @@ def main() -> int:
             ref_text=args.ref_text, source_language=args.source_language,
             target_language=args.target_language, whisper_model=args.whisper_model,
             consent_confirmed=args.consent_confirmed,
+            preserve_bg=not args.replace_audio,
         )
     except Exception as error:
         print(f"Lokales Dubbing fehlgeschlagen: {error}", file=sys.stderr)
