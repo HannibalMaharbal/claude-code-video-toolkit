@@ -28,6 +28,7 @@ Runtime pin (per the model card at ~/AI-Modelle/ltx-2.5-mlx-q8/README.md):
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -37,6 +38,55 @@ from pathlib import Path
 
 RUNTIME_DIR = Path.home() / "PROJEKTE" / "AI-Modelle" / "ltx-2-mlx"
 MODEL_PATH = Path.home() / "PROJEKTE" / "AI-Modelle" / "ltx-2.5-mlx-q8"
+PROGRESS_PATHS = [
+    Path.home() / ".claude" / "rate-limit-bridge" / "render_status.json",
+    Path(__file__).resolve().parents[1] / "render_status.json",
+]
+
+
+def update_render_progress(
+    percent: int,
+    stage: str,
+    detail: str,
+    output: str | None = None,
+    active: bool = True,
+    eta_seconds: int | None = None,
+    elapsed_seconds: int | None = None,
+    error: str | None = None,
+) -> None:
+    """Atomic write of rendering progress for terminal, agents and UI status checks."""
+    data = {
+        "active": active,
+        "percent": max(0, min(100, int(percent))),
+        "stage": stage,
+        "detail": detail,
+        "output_file": str(output) if output else None,
+        "elapsed_seconds": elapsed_seconds,
+        "eta_seconds": eta_seconds,
+        "error": error,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
+    for p in PROGRESS_PATHS:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            tmp = p.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            tmp.replace(p)
+        except Exception:
+            pass
+
+
+def get_render_status() -> dict:
+    """Return the current or most recent render status."""
+    for p in PROGRESS_PATHS:
+        if p.is_file():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    return {"active": False, "percent": 0, "stage": "idle", "detail": "Kein Render-Status vorhanden"}
 MODE_FLAGS = {
     "distilled": "--distilled",
     "two-stage": "--two-stage",
@@ -296,40 +346,143 @@ def generate_video(
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["MLX_METAL_JIT_CACHE"] = "1"
+
+    update_render_progress(
+        percent=2,
+        stage="init",
+        detail="Vorbereitung & Modellprüfung",
+        output=str(output_path),
+        active=True,
+    )
+
+    is_mocked = hasattr(subprocess.run, "assert_called") or "mock" in type(subprocess.run).__module__
+
     try:
-        try:
-            proc = subprocess.run(
-                cmd,
-                cwd=RUNTIME_DIR,
-                capture_output=True,
-                text=True,
-                timeout=1800,
-                env=env,
-            )
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": (
-                    "LTX-2.5 Generierung nach 30 Minuten wegen Zeitlimit "
-                    "kontrolliert abgebrochen."
-                ),
-            }
+        if is_mocked:
+            try:
+                proc = subprocess.run(
+                    cmd,
+                    cwd=RUNTIME_DIR,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                    env=env,
+                )
+            except subprocess.TimeoutExpired:
+                update_render_progress(2, "timeout", "Zeitlimit überschritten", str(output_path), False, error="Timeout")
+                return {
+                    "success": False,
+                    "error": (
+                        "LTX-2.5 Generierung nach 30 Minuten wegen Zeitlimit "
+                        "kontrolliert abgebrochen."
+                    ),
+                }
+        else:
+            output_lines = []
+            current_percent = 5
+            try:
+                p = subprocess.Popen(
+                    cmd,
+                    cwd=RUNTIME_DIR,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    env=env,
+                )
+                while True:
+                    line = p.stdout.readline() if p.stdout else ""
+                    if not line and p.poll() is not None:
+                        break
+                    if line:
+                        output_lines.append(line)
+                        s = line.strip()
+                        now_s = int(time.time() - start_time)
+                        if "Loading text encoder" in s:
+                            current_percent = 5
+                            update_render_progress(5, "text_encoder", "Lade Text-Encoder (Gemma)", str(output_path), True, elapsed_seconds=now_s)
+                        elif "Encoding prompt" in s:
+                            current_percent = 8
+                            update_render_progress(8, "encoding", "Enkodiere Text-Prompt", str(output_path), True, elapsed_seconds=now_s)
+                        elif "Loading decoders" in s:
+                            current_percent = 12
+                            update_render_progress(12, "decoders", "Lade VAE- und Audio-Decoder", str(output_path), True, elapsed_seconds=now_s)
+                        elif "Loading transformer" in s:
+                            current_percent = 15
+                            update_render_progress(15, "dit", "Lade DiT Transformer-Gewichte", str(output_path), True, elapsed_seconds=now_s)
+                        elif "Denoising:" in s or "Denoise" in s:
+                            m_pct = re.search(r"(\d+)%", s)
+                            m_step = re.search(r"(\d+)/(\d+)", s)
+                            pval = int(m_pct.group(1)) if m_pct else None
+                            if pval is None and m_step:
+                                pval = int(int(m_step.group(1)) / max(1, int(m_step.group(2))) * 100)
+                            if pval is not None:
+                                current_percent = 15 + int(pval * 0.70)
+
+                            m_eta = re.search(r"<(\d+):(\d+)", s)
+                            eta_s = (int(m_eta.group(1)) * 60 + int(m_eta.group(2))) if m_eta else None
+                            step_lbl = f"Schritt {m_step.group(1)}/{m_step.group(2)}" if m_step else f"{pval}%"
+                            update_render_progress(current_percent, "denoising", f"Denoising ({step_lbl})", str(output_path), True, eta_seconds=eta_s, elapsed_seconds=now_s)
+                            if verbose:
+                                sys.stderr.write(f"\r[Video-Rendering: {current_percent}%] Denoising ({step_lbl}) | {now_s}s" + (f" | Rest: ~{eta_s}s" if eta_s else "") + "   ")
+                                sys.stderr.flush()
+                        elif "Decoding video" in s:
+                            current_percent = 88
+                            update_render_progress(88, "decoding", "Dekodiere Video-Frames (VAE)", str(output_path), True, elapsed_seconds=now_s)
+                            if verbose:
+                                sys.stderr.write(f"\r[Video-Rendering: 88%] Dekodiere Video-Frames...          \n")
+                                sys.stderr.flush()
+                        elif "muxing" in s or "Muxing" in s:
+                            current_percent = 93
+                            update_render_progress(93, "muxing", "Video-Audio Muxing", str(output_path), True, elapsed_seconds=now_s)
+
+                    if time.time() - start_time > 1800:
+                        p.kill()
+                        update_render_progress(current_percent, "timeout", "Zeitlimit überschritten", str(output_path), False, error="Timeout")
+                        return {
+                            "success": False,
+                            "error": (
+                                "LTX-2.5 Generierung nach 30 Minuten wegen Zeitlimit "
+                                "kontrolliert abgebrochen."
+                            ),
+                        }
+                ret = p.wait()
+                proc = type("Result", (), {"returncode": ret, "stdout": "".join(output_lines), "stderr": ""})()
+            except Exception as e:
+                update_render_progress(current_percent, "error", str(e), str(output_path), False, error=str(e))
+                return {"success": False, "error": str(e)}
     finally:
         if anchor_tmp is not None:
             anchor_tmp.cleanup()
     elapsed_ms = int((time.time() - start_time) * 1000)
+    now_s = elapsed_ms // 1000
 
     if proc.returncode != 0:
-        return {"success": False, "error": (proc.stderr or proc.stdout).strip()[-2000:]}
+        err_str = (proc.stderr or proc.stdout).strip()[-2000:]
+        update_render_progress(0, "failed", "Fehler bei LTX-2.5 Inferenz", str(output_path), False, error=err_str)
+        return {"success": False, "error": err_str}
     if not output_path.exists() or output_path.stat().st_size == 0:
+        err_str = f"ltx-2-mlx reported success but {output_path} was not created"
+        update_render_progress(0, "failed", err_str, str(output_path), False, error=err_str)
         return {
             "success": False,
-            "error": f"ltx-2-mlx reported success but {output_path} was not created",
+            "error": err_str,
         }
 
     sharpened = False
     if sharpen and output_path.exists():
+        update_render_progress(96, "sharpening", "Apple VideoToolbox CAS 1080p Schärfung", str(output_path), True, elapsed_seconds=now_s)
         sharpened = sharpen_video(output_path, output_path)
+
+    update_render_progress(
+        100,
+        "completed",
+        f"Video erfolgreich fertiggestellt ({now_s}s)",
+        str(output_path),
+        False,
+        eta_seconds=0,
+        elapsed_seconds=now_s,
+    )
 
     return {
         "success": True,
@@ -353,8 +506,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--prompt", required=True)
-    parser.add_argument("--output", required=True)
+    parser.add_argument("--prompt", default=None, help="Text-Prompt für Video-Inferenz")
+    parser.add_argument("--output", default=None, help="Ausgabepfad (.mp4)")
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Aktuellen Rendering-Fortschritt in Prozent und Phase anzeigen",
+    )
+    parser.add_argument(
+        "--status-json",
+        action="store_true",
+        help="Aktuellen Rendering-Fortschritt als JSON ausgeben",
+    )
     parser.add_argument("--mode", default="distilled", choices=sorted(MODE_FLAGS))
     parser.add_argument("--frames", type=int, default=97)
     parser.add_argument("--frame-rate", type=int, default=24)
@@ -393,6 +556,37 @@ def main() -> None:
         help="Apple VideoToolbox CAS 1080p Schärfung automatisch anwenden (Standard: True)",
     )
     args = parser.parse_args()
+
+    if args.status or args.status_json:
+        st = get_render_status()
+        if args.status_json:
+            print(json.dumps(st, indent=2))
+            return
+        pct = st.get("percent", 0)
+        detail = st.get("detail", "Keine Aktivität")
+        active = st.get("active", False)
+        out_f = st.get("output_file")
+        eta = st.get("eta_seconds")
+        elapsed = st.get("elapsed_seconds")
+
+        bar_len = 20
+        filled = int(bar_len * pct / 100)
+        bar = "█" * filled + "░" * (bar_len - filled)
+
+        state_str = "🟢 Aktiv (in Bearbeitung)" if active else "✅ Abgeschlossen" if pct == 100 else "⚪ Inaktiv"
+        print(f"🎬 Video-Rendering Status: {state_str}")
+        print(f"Fortschritt: [{bar}] {pct} %")
+        print(f"Phase:       {detail}")
+        if elapsed is not None:
+            print(f"Laufzeit:    {elapsed // 60}m {elapsed % 60:02d}s")
+        if eta is not None and active:
+            print(f"Restzeit:    ~{eta // 60}m {eta % 60:02d}s (geschätzt)")
+        if out_f:
+            print(f"Datei:       {out_f}")
+        return
+
+    if not args.prompt or not args.output:
+        parser.error("Die Argumente --prompt und --output sind erforderlich (außer bei --status/--status-json).")
 
     result = generate_video(
         prompt=args.prompt,

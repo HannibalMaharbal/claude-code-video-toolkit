@@ -34,6 +34,8 @@ out/
 output/
 cache/
 models/
+render_status.json
+*.tmp
 *.mp4
 *.webm
 *.gif
