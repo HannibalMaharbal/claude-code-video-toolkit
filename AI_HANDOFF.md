@@ -1,3 +1,8 @@
+## Nachtrag — Z-Image-Werkzeug vollständig entfernt
+
+- Datum: 2026-10-25. Schreibender Agent: Codex 2. Task: `VT-REMOVE-ZIMAGE-20261025-01`.
+- Das Z-Image-Werkzeug wurde nach der endgültigen Ablehnung lokaler Bildmodelle aus Werkzeugbestand, Registry und aktiver Dokumentation entfernt; historische Aufgabenzeilen bleiben unverändert. Historische Handoff-Einträge bleiben unverändert. Kein Commit, Push, Netzwerkzugriff oder Download.
+
 ## Betriebsmodus: INTERN-ONLY. Kein Upload/Publish/Posting, fail-closed (unknown/UNKNOWN), additiv, Assets unveränderlich, keine Cloud/Kosten ohne Freigabe, Personenreferenzen nie an Anbieter ohne Consent, ein Schritt = ein Branch/Commit, kein Push. Einzige spätere Öffnung: release-ready/ nach manueller Freigabe. Stand: Phase 1 abgeschlossen (integration/internal-v1), Phase 2 Schritte 1–5 abgeschlossen (Text-Assets, Routing, Layout-Engine, Subtitle-Burn, Acceptance run2 15/15 PASS); integration/internal-v1 per --ff-only auf feature/capabilities @ 5391a66 vorgezogen, kein Push. Phase 3 (feature/system-core, Schritte 0–9) abgeschlossen: Stack-Härtung (F13 korrigiert), Push-Sperre video-toolkit-media, Plattform-Profile, Reframe, Semantik-Vertrag, Plattform-Varianten, Provenance, Release-Paket + Publish-Adapter-Trockenlauf, Acceptance run4 **25/25 PASS**. integration/internal-v1 per --ff-only auf feature/system-core @ 4407d31 vorgezogen, kein Push.
 
 ## Nachtrag — Identitäts-Pseudonymisierung

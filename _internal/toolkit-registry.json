@@ -572,23 +572,6 @@
         "RUNPOD_FLUX2_ENDPOINT_ID"
       ]
     },
-    "z_image": {
-      "path": "tools/z_image.py",
-      "description": "Free local image generation using Z-Image Turbo via MLX-Gen (Apple Silicon) \u2014 no API key, no cloud cost",
-      "usage": "python tools/z_image.py --prompt \"A puffin on a cliff\" --output puffin.png",
-      "status": "active",
-      "category": "image-generation",
-      "backend": "mlxgen (AbstractFramework/z-image-turbo-4bit, cached locally)",
-      "env_vars": [],
-      "options": {
-        "--width": "Image width (default: 1024)",
-        "--height": "Image height (default: 1024)",
-        "--steps": "Diffusion steps (default: 4, Turbo works well at 4-8)",
-        "--seed": "Random seed for reproducibility"
-      },
-      "verified": "Test generation confirmed working 2026-09-26 before activation",
-      "created": "2026-09-26"
-    },
     "qwen_image": {
       "path": null,
       "description": "Planned local image generation option (Qwen-Image via mlxgen). Not implemented \u2014 model not downloaded, no adapter written.",

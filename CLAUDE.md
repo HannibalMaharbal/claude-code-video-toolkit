@@ -123,7 +123,7 @@ This is especially critical for background commands where the working directory 
 |------|-------|-------------|
 | **Project tools** | voiceover, music, music_gen, sfx, sync_timing | During video creation workflow |
 | **Utility tools** | redub, addmusic, notebooklm_brand, locate_watermark | Quick transformations on existing videos |
-| **Free local** | transcribe, kokoro_tts, piper_tts, local_voice, redub, z_image, ltx2_local, seedvr2_mlx_adapter, subtitle_translate (`--engine argos`) | Local transcription (mlx-whisper), TTS (Kokoro/Piper), consent-gated Qwen3-TTS cloning/dubbing, image/video generation, video restoration/upscaling and offline translation — Apple Silicon, no API key |
+| **Free local** | transcribe, kokoro_tts, piper_tts, local_voice, redub, ltx2_local, seedvr2_mlx_adapter, subtitle_translate (`--engine argos`) | Local transcription (mlx-whisper), TTS (Kokoro/Piper), consent-gated Qwen3-TTS cloning/dubbing, video generation, video restoration/upscaling and offline translation — Apple Silicon, no API key |
 | **Cloud GPU** | image_edit, upscale, dewatermark, sadtalker, qwen3_tts, music_gen, flux2 | Optional external GPU processing; provider pricing and usage limits must be checked before use. The local `local_voice`/`redub` path does not use this cloud tool. |
 | **Cloud, low-cost** | gemini_tts, subtitle_translate (default engine) | Google Gemini API — rate-limited free tier + cheap paid tier; NOT local, NOT unconditionally free |
 | **Cloud, paid** | higgsfield_video | Higgsfield CLI video generation — always cost-gated, shows credits before spending |
@@ -316,18 +316,6 @@ python tools/upscale.py --input photo.jpg --scale 2 --model anime --face-enhance
 ```
 
 See `docs/qwen-edit-patterns.md` and `.claude/skills/qwen-edit/` for prompting guidance.
-
-### Z-Image Turbo (Standalone, local, MLX)
-
-Free, offline text-to-image generation via `mlxgen` on Apple Silicon — no API key, no cloud cost.
-
-```bash
-python tools/z_image.py --prompt "A puffin on a cliff" --output puffin.png
-python tools/z_image.py --prompt "Product shot" --width 1024 --height 1024 --steps 9
-python tools/z_image.py --prompt "..." --seed 42 --output out.png
-```
-
-Uses the already-cached `AbstractFramework/z-image-turbo-4bit` snapshot by default, so no model download is triggered. Verified with a live test generation before being marked active in the registry (2026-09-26).
 
 **Planned, not installed:** Qwen-Image (also via `mlxgen`) is noted as a future local image option in `_internal/toolkit-registry.json` (`qwen_image`, `status: planned`). No adapter exists and no download has been triggered — `mlxgen download --model Qwen/Qwen-Image` requires explicit approval first.
 
