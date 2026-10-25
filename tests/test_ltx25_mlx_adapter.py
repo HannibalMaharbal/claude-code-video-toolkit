@@ -244,3 +244,73 @@ def test_lora_flag_passed_to_command(tmp_path):
     idx = cmd.index("--lora")
     assert cmd[idx : idx + 3] == ["--lora", "Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate", "0.85"]
 
+
+def test_sharpen_video_invokes_cas_and_videotoolbox(tmp_path):
+    video = tmp_path / "raw.mp4"
+    video.write_bytes(b"dummy-video-data")
+    out = tmp_path / "sharp.mp4"
+
+    ffmpeg_call = []
+
+    def mock_run(cmd, **kwargs):
+        ffmpeg_call.append(cmd)
+        Path(cmd[-1]).write_bytes(b"sharpened-video-data")
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch.object(ltx.shutil, "which", return_value="/opt/homebrew/bin/ffmpeg"),
+        patch.object(ltx.subprocess, "run", side_effect=mock_run),
+    ):
+        ok = ltx.sharpen_video(video, out, cas=0.6)
+
+    assert ok is True
+    assert len(ffmpeg_call) == 1
+    cmd = ffmpeg_call[0]
+    assert cmd[0] == "/opt/homebrew/bin/ffmpeg"
+    assert "cas=0.6" in cmd[cmd.index("-vf") + 1]
+    assert "h264_videotoolbox" in cmd
+    assert out.exists()
+
+
+def test_generate_video_with_sharpen_true_applies_sharpening(tmp_path):
+    output = tmp_path / "gen_sharp.mp4"
+    runtime = tmp_path / "runtime"
+    model = tmp_path / "model"
+    runtime.mkdir()
+    model.mkdir()
+
+    calls = []
+
+    def mock_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[0] == "/usr/bin/ffmpeg":
+            Path(cmd[-1]).write_bytes(b"sharpened")
+        else:
+            output.write_bytes(b"generated")
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch.object(
+            ltx.shutil,
+            "which",
+            side_effect=lambda name: f"/usr/bin/{name}" if name in {"uv", "ffmpeg"} else None,
+        ),
+        patch.object(ltx, "RUNTIME_DIR", runtime),
+        patch.object(ltx, "MODEL_PATH", model),
+        patch.object(ltx.subprocess, "run", side_effect=mock_run),
+    ):
+        result = ltx.generate_video(
+            "Crisp cinematic product render.",
+            str(output),
+            sharpen=True,
+            verbose=False,
+        )
+
+    assert result["success"] is True
+    assert result["sharpened"] is True
+    assert len(calls) == 2
+    # calls[0] is ltx-2-mlx generate, calls[1] is ffmpeg CAS
+    assert calls[0][1:3] == ["run", "ltx-2-mlx"]
+    assert calls[1][0] == "/usr/bin/ffmpeg"
+    assert "cas=0.6" in calls[1][calls[1].index("-vf") + 1]
+

@@ -129,7 +129,7 @@ def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
     # Filter: Scale keeping aspect ratio (1080p target) + CAS (0.6) + light unsharp mask
     # Handles both 16:9 landscape and 9:16 vertical automatically
     vf_filter = (
-        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos,"
+        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos:param0=3,"
         "cas=0.6,"
         "unsharp=5:5:0.5:3:3:0.2"
     )
@@ -145,6 +145,12 @@ def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
         "h264_videotoolbox",
         "-b:v",
         "20M",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
         "-c:a",
         "copy",
         output_path,

@@ -46,11 +46,15 @@ MODE_FLAGS = {
 
 _CONTINUITY_SUFFIX = (
     " Keep one continuous physical scene with the same subject, physical set, "
-    "wardrobe, and props. Keep lighting direction and color temperature constant across every shot. "
-    "Use smooth motivated camera movement and natural micro-movements with visible "
-    "environmental motion, settling smoothly. Preserve coherent physics and temporal continuity: no "
-    "spatial teleportation, disjointed cuts, identity drift, morphing, flicker, or "
-    "frozen frames."
+    "wardrobe, and props. Keep lighting direction and color temperature constant "
+    "across every shot. Use smooth motivated camera movement and natural micro-movements "
+    "with visible environmental motion, settling smoothly. Preserve coherent physics "
+    "and temporal continuity: no spatial teleportation, disjointed cuts, identity drift, "
+    "morphing, flicker, or frozen frames."
+)
+_SHARPNESS_SUFFIX = (
+    " tack-sharp focus, Cooke 50mm T2.0 prime lens, high micro-contrast, "
+    "crisp 8k textures, clean sharp edges, zero motion blur."
 )
 _IMAGE_SUFFIX = (
     " Preserve the reference image's identity, composition, materials, and geometry "
@@ -63,10 +67,12 @@ _KEYFRAME_SUFFIX = (
 
 
 def enhance_ltx_prompt(prompt: str, image: bool = False) -> str:
-    """Add the shared Hannibal continuity contract once for every LTX caller."""
+    """Add the shared Hannibal continuity and optical sharpness contract once for callers."""
     cleaned = " ".join(prompt.split())
     if _CONTINUITY_SUFFIX.strip() not in cleaned:
         cleaned += _CONTINUITY_SUFFIX
+    if _SHARPNESS_SUFFIX.strip() not in cleaned:
+        cleaned += _SHARPNESS_SUFFIX
     if image and _IMAGE_SUFFIX.strip() not in cleaned:
         cleaned += _IMAGE_SUFFIX
     return cleaned
@@ -105,6 +111,63 @@ def _extract_last_frame(video_path: Path, output_path: Path) -> str | None:
     return None
 
 
+def sharpen_video(
+    input_path: Path | str,
+    output_path: Path | str | None = None,
+    cas: float = 0.6,
+) -> bool:
+    """Run Apple Silicon VideoToolbox Lanczos 1080p scaling + Contrast Adaptive Sharpening (CAS).
+
+    Hardware-accelerated via h264_videotoolbox (0 € Grenzkosten, ~0.3s on Apple Silicon).
+    """
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return False
+    in_p = Path(input_path)
+    if not in_p.is_file():
+        return False
+
+    out_p = Path(output_path) if output_path else in_p
+    in_place = in_p.resolve() == out_p.resolve()
+    target_p = out_p.with_suffix(".cas_tmp.mp4") if in_place else out_p
+
+    vf_filter = (
+        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos:param0=3,"
+        f"cas={cas},"
+        "unsharp=5:5:0.5:3:3:0.2"
+    )
+
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        str(in_p),
+        "-vf",
+        vf_filter,
+        "-c:v",
+        "h264_videotoolbox",
+        "-b:v",
+        "20M",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-colorspace",
+        "bt709",
+        "-c:a",
+        "copy",
+        str(target_p),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        if in_place and target_p.exists():
+            target_p.unlink(missing_ok=True)
+        return False
+    if in_place:
+        target_p.replace(out_p)
+    return True
+
+
 def generate_video(
     prompt: str,
     output_path: str,
@@ -120,6 +183,7 @@ def generate_video(
     lora: str | None = None,
     lora_strength: float = 1.0,
     verbose: bool = True,
+    sharpen: bool = False,
 ) -> dict:
     if image and continue_from:
         return {
@@ -184,7 +248,12 @@ def generate_video(
             }
         image = str(anchor_path)
 
-    task = "keyframe-interpolation" if (image and end_image) else ("image-to-video" if (image or end_image) else "text-to-video")
+    if image and end_image:
+        task = "keyframe-interpolation"
+    elif image or end_image:
+        task = "image-to-video"
+    else:
+        task = "text-to-video"
     enhanced_prompt = enhance_ltx_prompt(prompt, image=bool(image or end_image))
     if end_image and _KEYFRAME_SUFFIX.strip() not in enhanced_prompt:
         enhanced_prompt += _KEYFRAME_SUFFIX
@@ -258,6 +327,10 @@ def generate_video(
             "error": f"ltx-2-mlx reported success but {output_path} was not created",
         }
 
+    sharpened = False
+    if sharpen and output_path.exists():
+        sharpened = sharpen_video(output_path, output_path)
+
     return {
         "success": True,
         "output": str(output_path),
@@ -268,6 +341,7 @@ def generate_video(
         "frame_rate": frame_rate,
         "seed": seed,
         "prompt_enhanced": True,
+        "sharpened": sharpened,
         "continuation_source": continuation_source,
         "end_image": end_image,
         "lora": lora,
@@ -312,6 +386,12 @@ def main() -> None:
         help="LoRA-Stärke (Standard: 1.0)",
     )
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--sharpen",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Apple VideoToolbox CAS 1080p Schärfung automatisch anwenden (Standard: True)",
+    )
     args = parser.parse_args()
 
     result = generate_video(
@@ -328,6 +408,7 @@ def main() -> None:
         continue_from=args.continue_from,
         lora=args.lora,
         lora_strength=args.lora_strength,
+        sharpen=args.sharpen,
     )
     print(json.dumps(result))
     if not result.get("success"):
