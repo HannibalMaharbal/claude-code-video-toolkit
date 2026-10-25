@@ -106,6 +106,84 @@ def validate_scene(
     ]
 
 
+def audit_mesh_geometry(scene: bpy.types.Scene, recalculate_normals: bool = True) -> dict:
+    """Performs deep mechanical and geometric audit of all scene meshes.
+    
+    Verifies manifoldness (watertightness for CAD / 3D printing), loose vertices,
+    and bounding dimensions. Optionally normalizes face normals to point outside.
+    """
+    import bmesh
+
+    meshes = [obj for obj in scene.objects if obj.type == "MESH"]
+    if not meshes:
+        return {"status": "empty", "total_meshes": 0, "is_watertight_for_cad": False}
+
+    total_vertices = 0
+    total_edges = 0
+    total_faces = 0
+    non_manifold_count = 0
+    loose_vertices_count = 0
+    mesh_details = []
+
+    for obj in meshes:
+        mesh = obj.data
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+
+        nm_edges = sum(1 for e in bm.edges if not e.is_manifold)
+        loose_v = sum(1 for v in bm.verts if not v.link_edges)
+
+        if recalculate_normals and len(bm.faces) > 0:
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+            bm.to_mesh(mesh)
+            mesh.update()
+
+        dims = obj.dimensions
+        mesh_details.append({
+            "name": obj.name,
+            "vertices": len(bm.verts),
+            "edges": len(bm.edges),
+            "faces": len(bm.faces),
+            "non_manifold_edges": nm_edges,
+            "loose_vertices": loose_v,
+            "dimensions_meters": [round(dims.x, 4), round(dims.y, 4), round(dims.z, 4)],
+            "is_watertight": nm_edges == 0,
+        })
+        total_vertices += len(bm.verts)
+        total_edges += len(bm.edges)
+        total_faces += len(bm.faces)
+        non_manifold_count += nm_edges
+        loose_vertices_count += loose_v
+        bm.free()
+
+    is_watertight = non_manifold_count == 0
+    return {
+        "status": "ok",
+        "total_meshes": len(meshes),
+        "total_vertices": total_vertices,
+        "total_edges": total_edges,
+        "total_faces": total_faces,
+        "non_manifold_edges": non_manifold_count,
+        "loose_vertices": loose_vertices_count,
+        "is_watertight_for_cad": is_watertight,
+        "meshes": mesh_details,
+    }
+
+
+def export_clean_geometry(filepath: str, format_type: str = "glb") -> str:
+    """Exports clean geometry directly to GLB (Web/AR) or STL (Fusion 360 / CAD / 3D Druck)."""
+    dest = Path(filepath).expanduser().resolve()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fmt = format_type.lower()
+    if fmt == "stl":
+        bpy.ops.wm.stl_export(filepath=str(dest))
+    elif fmt in {"glb", "gltf"}:
+        bpy.ops.export_scene.gltf(filepath=str(dest), export_format="GLB")
+    else:
+        raise ValueError(f"Nicht unterstütztes Export-Format: {format_type}")
+    return str(dest)
+
+
 def prepare_scene(scene: bpy.types.Scene) -> None:
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
     if not meshes:
