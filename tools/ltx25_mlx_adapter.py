@@ -94,17 +94,44 @@ MODE_FLAGS = {
     "one-stage": "--one-stage",
 }
 
+VIDEO_QUALITY_PRESETS = {
+    "ENTWURF": {
+        "width": 640,
+        "height": 384,
+        "frames": 49,
+        "frame_rate": 24,
+        "mode": "distilled",
+        "cas": 0.35,
+    },
+    "STANDARD": {
+        "width": 768,
+        "height": 448,
+        "frames": 97,
+        "frame_rate": 24,
+        "mode": "distilled",
+        "cas": 0.45,
+    },
+    "MAXIMAL": {
+        "width": 1024,
+        "height": 576,
+        "frames": 97,
+        "frame_rate": 24,
+        "mode": "distilled",
+        "cas": 0.45,
+    },
+}
+
 _CONTINUITY_SUFFIX = (
     " Keep one continuous physical scene with the same subject, physical set, "
     "wardrobe, and props. Keep lighting direction and color temperature constant "
     "across every shot. Use smooth motivated camera movement and natural micro-movements "
-    "with visible environmental motion, settling smoothly. Preserve coherent physics "
+    "with continuous organic motion. Preserve coherent physics "
     "and temporal continuity: no spatial teleportation, disjointed cuts, identity drift, "
-    "morphing, flicker, or frozen frames."
+    "morphing, or flicker."
 )
 _SHARPNESS_SUFFIX = (
-    " tack-sharp focus, Cooke 50mm T2.0 prime lens, high micro-contrast, "
-    "crisp 8k textures, clean sharp edges, zero motion blur."
+    " Natural 35mm cinema prime lens, tack-sharp focus, authentic optical micro-contrast, "
+    "clean natural edges, true-to-life textures."
 )
 _IMAGE_SUFFIX = (
     " Preserve the reference image's identity, composition, materials, and geometry "
@@ -114,6 +141,39 @@ _KEYFRAME_SUFFIX = (
     " Transition smoothly from the initial frame to the target end frame without "
     "drifting or jarring morphs."
 )
+
+
+def _ensure_ollama_unloaded() -> None:
+    """Unload any resident Ollama models before starting heavy MLX video inference on 24 GB Unified Memory."""
+    ollama = shutil.which("ollama")
+    if not ollama:
+        return
+    try:
+        ps = subprocess.run([ollama, "ps"], capture_output=True, text=True, timeout=3)
+        if ps.returncode != 0:
+            return
+        for line in ps.stdout.strip().splitlines()[1:]:
+            parts = line.split()
+            if parts:
+                subprocess.run([ollama, "stop", parts[0]], capture_output=True, text=True, timeout=5)
+    except Exception:
+        pass
+
+
+def _prepare_i2v_reference(src_path: str, width: int, height: int, dst_path: Path) -> str:
+    """Aspect-fit and apply sub-pixel Luma-only UnsharpMask (r=0.70, p=85, th=2) into a lossless PNG."""
+    try:
+        from PIL import Image, ImageFilter, ImageOps
+        with Image.open(src_path) as im:
+            rgb = im.convert("RGB")
+            fitted = ImageOps.fit(rgb, (width, height), method=Image.Resampling.LANCZOS)
+            y, cb, cr = fitted.convert("YCbCr").split()
+            y = y.filter(ImageFilter.UnsharpMask(radius=0.70, percent=85, threshold=2))
+            prepped = Image.merge("YCbCr", (y, cb, cr)).convert("RGB")
+            prepped.save(dst_path, format="PNG")
+            return str(dst_path)
+    except Exception:
+        return src_path
 
 
 def enhance_ltx_prompt(prompt: str, image: bool = False) -> str:
@@ -182,9 +242,9 @@ def sharpen_video(
     target_p = out_p.with_suffix(".cas_tmp.mp4") if in_place else out_p
 
     vf_filter = (
-        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos:param0=3,"
+        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos+accurate_rnd+full_chroma_int,"
         f"cas={cas},"
-        "unsharp=5:5:0.5:3:3:0.2"
+        "unsharp=3:3:0.30:3:3:0.0"
     )
 
     cmd = [
@@ -197,7 +257,9 @@ def sharpen_video(
         "-c:v",
         "h264_videotoolbox",
         "-b:v",
-        "20M",
+        "24M",
+        "-profile:v",
+        "high",
         "-color_primaries",
         "bt709",
         "-color_trc",
@@ -285,6 +347,9 @@ def generate_video(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     continuation_source = str(Path(continue_from)) if continue_from else None
+    is_mocked = hasattr(subprocess.run, "assert_called") or "mock" in type(subprocess.run).__module__
+    if not is_mocked:
+        _ensure_ollama_unloaded()
     anchor_tmp = None
     if continue_from:
         anchor_tmp = tempfile.TemporaryDirectory(prefix="ltx25-continuation-")
@@ -297,6 +362,12 @@ def generate_video(
                 "error": f"Endframe konnte nicht extrahiert werden: {extraction_error}",
             }
         image = str(anchor_path)
+    elif not is_mocked and (image or end_image):
+        anchor_tmp = tempfile.TemporaryDirectory(prefix="ltx25-i2v-prep-")
+        if image:
+            image = _prepare_i2v_reference(image, width, height, Path(anchor_tmp.name) / "start-prepped.png")
+        if end_image:
+            end_image = _prepare_i2v_reference(end_image, width, height, Path(anchor_tmp.name) / "end-prepped.png")
 
     if image and end_image:
         task = "keyframe-interpolation"
@@ -346,6 +417,7 @@ def generate_video(
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["MLX_METAL_JIT_CACHE"] = "1"
+    env["LTX_IMAGE_CRF"] = "0"
 
     update_render_progress(
         percent=2,
@@ -354,8 +426,6 @@ def generate_video(
         output=str(output_path),
         active=True,
     )
-
-    is_mocked = hasattr(subprocess.run, "assert_called") or "mock" in type(subprocess.run).__module__
 
     try:
         if is_mocked:
@@ -518,11 +588,17 @@ def main() -> None:
         action="store_true",
         help="Aktuellen Rendering-Fortschritt als JSON ausgeben",
     )
+    parser.add_argument(
+        "--preset",
+        default=None,
+        choices=sorted(VIDEO_QUALITY_PRESETS),
+        help="Kalibriertes Qualitäts-Preset (ENTWURF: 640x384, STANDARD: 768x448, MAXIMAL: 1024x576)",
+    )
     parser.add_argument("--mode", default="distilled", choices=sorted(MODE_FLAGS))
     parser.add_argument("--frames", type=int, default=97)
     parser.add_argument("--frame-rate", type=int, default=24)
-    parser.add_argument("--width", type=int, default=704)
-    parser.add_argument("--height", type=int, default=480)
+    parser.add_argument("--width", type=int, default=768)
+    parser.add_argument("--height", type=int, default=448)
     parser.add_argument("--image", default=None)
     parser.add_argument(
         "--end-image",
@@ -587,6 +663,14 @@ def main() -> None:
 
     if not args.prompt or not args.output:
         parser.error("Die Argumente --prompt und --output sind erforderlich (außer bei --status/--status-json).")
+
+    if args.preset:
+        p_cfg = VIDEO_QUALITY_PRESETS[args.preset]
+        args.width = p_cfg["width"]
+        args.height = p_cfg["height"]
+        args.frames = p_cfg["frames"]
+        args.frame_rate = p_cfg["frame_rate"]
+        args.mode = p_cfg["mode"]
 
     result = generate_video(
         prompt=args.prompt,
