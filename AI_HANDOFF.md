@@ -1,3 +1,71 @@
+## Nachtrag — HYPERFRAMES-POC-01 auf 5-Sterne-Stand gehärtet
+
+- Datum: 2026-10-26. Schreibender Agent: Codex 1. Direkter Folgeauftrag:
+  Schwachstellen des ersten PoC beheben und eine belastbare 5-Sterne-Fassung
+  liefern. Kein Commit, Push, Deployment, Upload oder kostenpflichtiger Aufruf.
+- Reproduzierbarkeit: GSAP `3.14.2` liegt nun versioniert unter
+  `hyperframes-test/assets/vendor/`; EB Garamond 400/700 samt OFL-Lizenz liegt
+  unter `assets/fonts/` und wird beim Render als lokale Data-URI eingebettet.
+  Die Komposition referenziert keine CDN-Runtime mehr.
+- Audio-Finishing: Der stille Testtrack wurde im aktiven Mix durch drei lokal
+  gebündelte SFX ersetzt (Transition-Whoosh, Logo-Riser, Logo-Impact). Peaks
+  wurden analysiert und bildsynchron auf 5.0 s sowie 10.0 s gelegt. Gemeinsamer
+  Highpass-/Limiter-Bus; gemessener finaler Mix: `-15.9 LUFS`, `-3.2 dBTP`,
+  keine Clippings, keine Audio-Warnungen.
+- Erweitertes Gate: `hyperframes check --json` weiterhin 0 Fehler/0 Warnungen,
+  Runtime/Layout/Craft sauber, Kontrast 17/17. `snapshot --review --describe false`
+  erzeugte und visuell bestandene Beat-, Schnitt- und Phone-Kontaktboegen; kein
+  Gemini/API-Aufruf bei diesem Review.
+- Finales Ergebnis:
+  `hyperframes-test/renders/licbarska-consult-b2b-5star-v2-15s.mp4`.
+  Delivery-/High-Quality-Render mit `--strict-all`: exakt 15.000 s, 1920x1080,
+  H.264, 30 fps/450 Frames, AAC Stereo 48 kHz, 1,290,138 Bytes. Pipeline 15.3 s,
+  Hardware-GPU, vier Worker, maximaler Prozess-RSS 709,853,184 Bytes, 0 Swaps.
+- Urteil nach technischer Eigenverifikation: **5/5 Sterne fuer den definierten
+  Einsatzbereich** (deterministische B2B-Typografie-, Kennzahlen- und Social-
+  Motion-Clips). Der frühere 4/5-Befund ist durch lokales Vendoring, echten
+  Sounddesign-Mix, Delivery-Render und erweiterte Schnitt-/Phone-Pruefung behoben.
+  Eine unabhaengige Abnahme durch Hannibal oder Antigravity bleibt als separates
+  Vier-Augen-Gate offen.
+
+## Nachtrag — HYPERFRAMES-POC-01 abgeschlossen
+
+- Datum: 2026-10-26. Schreibender Agent: Codex 1 auf direkten Nutzerauftrag nach
+  erreichtem Claude-/Codex-2-Limit. Branch/Worktree: `audit/claude-review` /
+  Repository-Root. Kein Commit, Push,
+  Deployment oder Upload.
+- Ziel: HyperFrames lokal auf dem Mac als deterministischen HTML/CSS-zu-MP4-
+  Renderer evaluieren und ein 15-sekuendiges B2B-Testvideo fuer Licbarska Consult
+  erstellen.
+- Projekt: `hyperframes-test/`; Hauptdatei `index.html`, drei seekbare
+  Subkompositionen plus Gold-Wipe, animierte Headline, 0-82-%-Kennzahlen-Counter
+  und lokaler technischer Audio-Track. Markenfarben wurden aus
+  `brands/licbarska/brand.json` uebernommen.
+- Voraussetzungen verifiziert: Node.js `v22.23.2`, npm `10.9.8`, FFmpeg `9.0.2`,
+  HyperFrames CLI `0.8.189`; Render auf Apple M4 Pro mit hardwarebeschleunigtem
+  Headless Chrome/Metal.
+- Verifikation: `hyperframes check --json` vollstaendig sauber (0 Fehler,
+  0 Warnungen; Runtime/Layout/Craft 0/0; Kontrast 16/16). Sechs Zeitpunkte plus
+  Endframe visuell als Kontaktbogen geprueft. Lokaler Preview-Server erfolgreich.
+- Ergebnis: `hyperframes-test/renders/licbarska-consult-b2b-poc-15s.mp4`,
+  1,002,527 Bytes. `ffprobe`: exakt 15.000 s, 1920x1080, H.264, 30 fps,
+  450 Frames, AAC Stereo 48 kHz. Decodierte MP4-Frames wurden erneut als
+  Kontaktbogen visuell geprueft.
+- Leistung: HyperFrames-Pipeline 16.3 s (Gesamtprozess 20.70 s), vier Capture-
+  Worker, Hardware-GPU; maximaler Prozess-RSS 627,982,336 Bytes (~599 MiB),
+  keine Swaps. Der 15-s-Clip rendert damit auf diesem M4 Pro schneller als
+  Echtzeit.
+- Serienurteil: **4/5 Sterne, bedingt produktionsreif** fuer datengetriebene
+  B2B-Typografie, Kennzahlen-Clips und wiederholbare Social-/Praesentationsassets.
+  Staerken: schneller lokaler Render, kleine Artefakte, deterministische Timeline,
+  HTML/CSS-DX. Grenzen: Webfonts/GSAP werden beim Compile aus Cache/CDN aufgeloest;
+  fuer vollstaendig offline-reproduzierbare Serienproduktion muessen diese Assets
+  lokal vendort werden. Das erzeugte Audio ist nur ein nahezu stiller technischer
+  AAC-Mux-Test und kein finaler Soundmix.
+- Abnahme: technische Eigenverifikation bestanden. Unabhaengige Abnahme durch
+  Hannibal oder Antigravity ist weiterhin offen; Codex bewertet die eigene
+  Aenderung nicht als unabhaengiges Review.
+
 ## Nachtrag — Z-Image-Werkzeug vollständig entfernt
 
 - Datum: 2026-10-25. Schreibender Agent: Codex 2. Task: `VT-REMOVE-ZIMAGE-20261025-01`.
