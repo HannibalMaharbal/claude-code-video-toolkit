@@ -328,14 +328,6 @@ def generate_video(
                 f"bekommen: {width}x{height}."
             ),
         }
-    if mode in HALVING_MODES and (width % 64 or height % 64):
-        return {
-            "success": False,
-            "error": (
-                f"Modus '{mode}' halbiert die Auflösung in Stage 1: Breite/Höhe müssen durch 64 teilbar sein, "
-                f"bekommen: {width}x{height} (z. B. 768x448 oder 1024x576)."
-            ),
-        }
     if (frames - 1) % 8:
         return {
             "success": False,

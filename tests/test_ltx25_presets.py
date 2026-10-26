@@ -45,15 +45,19 @@ def test_generate_video_default_resolution_is_on_64px_grid():
     assert sig.parameters["height"].default % 64 == 0
 
 
-@pytest.mark.parametrize("w,h", [(704, 480), (512, 288)])
-def test_two_stage_modes_reject_resolutions_off_the_64px_grid(tmp_path, w, h):
-    # Ohne Validierung würde hier ein echter Render starten: Subprozesse sind hart blockiert.
-    with patch.object(ltx.subprocess, "run", side_effect=AssertionError("kein Render erlaubt")) as run, \
-         patch.object(ltx, "_ensure_ollama_unloaded"):
-        result = ltx.generate_video("x", str(tmp_path / "o.mp4"), width=w, height=h, verbose=False)
+@pytest.mark.parametrize("w,h", [(704, 480), (480, 704), (512, 288)])
+def test_existing_32px_grid_consumers_remain_supported(tmp_path, w, h):
+    cmd, _ = _cmd_for(tmp_path, width=w, height=h)
+    assert "--width" in cmd and str(w) in cmd
+    assert "--height" in cmd and str(h) in cmd
+
+
+def test_resolution_off_the_32px_grid_is_rejected(tmp_path):
+    with patch.object(ltx.subprocess, "run", side_effect=AssertionError("kein Render erlaubt")) as run:
+        result = ltx.generate_video("x", str(tmp_path / "o.mp4"), width=704, height=472, verbose=False)
     run.assert_not_called()
     assert result["success"] is False
-    assert "64" in result["error"]
+    assert "32" in result["error"]
 
 
 def _cmd_for(tmp_path, **kwargs):
