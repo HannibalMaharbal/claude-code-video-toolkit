@@ -94,6 +94,11 @@ MODE_FLAGS = {
     "one-stage": "--one-stage",
 }
 
+# Stage 1 der Zwei-Stufen-Pipelines halbiert die Auflösung und braucht dort wieder das 32px-VAE-Raster,
+# daher müssen Breite und Höhe durch 64 teilbar sein; sonst wird Stage 1 still abgeschnitten.
+HALVING_MODES = ("distilled", "two-stage", "two-stages-hq")
+DEFAULT_PRESET = "STANDARD"
+
 VIDEO_QUALITY_PRESETS = {
     "ENTWURF": {
         "width": 640,
@@ -114,7 +119,7 @@ VIDEO_QUALITY_PRESETS = {
     "MAXIMAL": {
         "width": 1024,
         "height": 576,
-        "frames": 97,
+        "frames": 49,  # 97 Frames bei 1024x576 noch nicht auf RAM gemessen (Audit 26.10.2026)
         "frame_rate": 24,
         "mode": "distilled",
         "cas": 0.45,
@@ -284,8 +289,8 @@ def generate_video(
     prompt: str,
     output_path: str,
     mode: str = "distilled",
-    width: int = 704,
-    height: int = 480,
+    width: int = 768,
+    height: int = 448,
     frames: int = 97,
     frame_rate: int = 24,
     seed: int | None = None,
@@ -296,6 +301,7 @@ def generate_video(
     lora_strength: float = 1.0,
     verbose: bool = True,
     sharpen: bool = False,
+    cas: float = 0.6,
 ) -> dict:
     if image and continue_from:
         return {
@@ -319,6 +325,14 @@ def generate_video(
             "error": (
                 "LTX-2.5 braucht Breite/Höhe durch 32 teilbar, "
                 f"bekommen: {width}x{height}."
+            ),
+        }
+    if mode in HALVING_MODES and (width % 64 or height % 64):
+        return {
+            "success": False,
+            "error": (
+                f"Modus '{mode}' halbiert die Auflösung in Stage 1: Breite/Höhe müssen durch 64 teilbar sein, "
+                f"bekommen: {width}x{height} (z. B. 768x448 oder 1024x576)."
             ),
         }
     if (frames - 1) % 8:
@@ -542,7 +556,7 @@ def generate_video(
     sharpened = False
     if sharpen and output_path.exists():
         update_render_progress(96, "sharpening", "Apple VideoToolbox CAS 1080p Schärfung", str(output_path), True, elapsed_seconds=now_s)
-        sharpened = sharpen_video(output_path, output_path)
+        sharpened = sharpen_video(output_path, output_path, cas=cas)
 
     update_render_progress(
         100,
@@ -572,7 +586,7 @@ def generate_video(
     }
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -594,11 +608,13 @@ def main() -> None:
         choices=sorted(VIDEO_QUALITY_PRESETS),
         help="Kalibriertes Qualitäts-Preset (ENTWURF: 640x384, STANDARD: 768x448, MAXIMAL: 1024x576)",
     )
-    parser.add_argument("--mode", default="distilled", choices=sorted(MODE_FLAGS))
-    parser.add_argument("--frames", type=int, default=97)
-    parser.add_argument("--frame-rate", type=int, default=24)
-    parser.add_argument("--width", type=int, default=768)
-    parser.add_argument("--height", type=int, default=448)
+    # Ohne Angabe gilt das Preset (Standard: STANDARD); explizite Werte haben immer Vorrang.
+    parser.add_argument("--mode", default=None, choices=sorted(MODE_FLAGS))
+    parser.add_argument("--frames", type=int, default=None)
+    parser.add_argument("--frame-rate", type=int, default=None)
+    parser.add_argument("--width", type=int, default=None)
+    parser.add_argument("--height", type=int, default=None)
+    parser.add_argument("--cas", type=float, default=None, help="CAS-Stärke der 1080p-Schärfung (Standard: aus Preset)")
     parser.add_argument("--image", default=None)
     parser.add_argument(
         "--end-image",
@@ -631,6 +647,20 @@ def main() -> None:
         default=True,
         help="Apple VideoToolbox CAS 1080p Schärfung automatisch anwenden (Standard: True)",
     )
+    return parser
+
+
+def resolve_settings(args: argparse.Namespace) -> argparse.Namespace:
+    """Preset-Werte nur für nicht explizit gesetzte Parameter übernehmen."""
+    cfg = VIDEO_QUALITY_PRESETS[args.preset or DEFAULT_PRESET]
+    for key in ("width", "height", "frames", "frame_rate", "mode", "cas"):
+        if getattr(args, key) is None:
+            setattr(args, key, cfg[key])
+    return args
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.status or args.status_json:
@@ -664,13 +694,7 @@ def main() -> None:
     if not args.prompt or not args.output:
         parser.error("Die Argumente --prompt und --output sind erforderlich (außer bei --status/--status-json).")
 
-    if args.preset:
-        p_cfg = VIDEO_QUALITY_PRESETS[args.preset]
-        args.width = p_cfg["width"]
-        args.height = p_cfg["height"]
-        args.frames = p_cfg["frames"]
-        args.frame_rate = p_cfg["frame_rate"]
-        args.mode = p_cfg["mode"]
+    args = resolve_settings(args)
 
     result = generate_video(
         prompt=args.prompt,
@@ -687,6 +711,7 @@ def main() -> None:
         lora=args.lora,
         lora_strength=args.lora_strength,
         sharpen=args.sharpen,
+        cas=args.cas,
     )
     print(json.dumps(result))
     if not result.get("success"):
