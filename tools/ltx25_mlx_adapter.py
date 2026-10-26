@@ -97,6 +97,7 @@ MODE_FLAGS = {
 # Stage 1 der Zwei-Stufen-Pipelines halbiert die Auflösung und braucht dort wieder das 32px-VAE-Raster,
 # daher müssen Breite und Höhe durch 64 teilbar sein; sonst wird Stage 1 still abgeschnitten.
 HALVING_MODES = ("distilled", "two-stage", "two-stages-hq")
+IMAGE_CRF = "0"
 DEFAULT_PRESET = "STANDARD"
 
 VIDEO_QUALITY_PRESETS = {
@@ -405,12 +406,12 @@ def generate_video(
         "--frame-rate", str(frame_rate),
         "--output", str(output_path),
     ]
-    if image and end_image:
-        cmd += ["--image", image, "0", "1.0", "--image", end_image, str(frames - 1), "1.0"]
-    elif image:
-        cmd += ["--image", image]
-    elif end_image:
-        cmd += ["--image", end_image, str(frames - 1), "1.0"]
+    # CRF 0 je Bild über die Upstream-CLI (PATH FRAME STRENGTH CRF) = verlustfreie Konditionierung ohne
+    # libx264-Umweg; Audit 26.10.2026: ~3 % mehr Schärfe, kein Sprung Frame 0->1, kein Runtime-Patch nötig.
+    if image:
+        cmd += ["--image", image, "0", "1.0", IMAGE_CRF]
+    if end_image:
+        cmd += ["--image", end_image, str(frames - 1), "1.0", IMAGE_CRF]
 
     if lora:
         cmd += ["--lora", str(lora), str(lora_strength)]
@@ -431,7 +432,6 @@ def generate_video(
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     env["MLX_METAL_JIT_CACHE"] = "1"
-    env["LTX_IMAGE_CRF"] = "0"
 
     update_render_progress(
         percent=2,

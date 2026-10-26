@@ -56,6 +56,45 @@ def test_two_stage_modes_reject_resolutions_off_the_64px_grid(tmp_path, w, h):
     assert "64" in result["error"]
 
 
+def _cmd_for(tmp_path, **kwargs):
+    output = tmp_path / "clip.mp4"
+    runtime, model = tmp_path / "runtime", tmp_path / "model"
+    runtime.mkdir(exist_ok=True); model.mkdir(exist_ok=True)
+    for name in ("start.png", "end.png"):
+        (tmp_path / name).write_bytes(b"img")
+
+    def completed(cmd, **kw):
+        output.write_bytes(b"video")
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    with (
+        patch.object(ltx.shutil, "which", return_value="/usr/bin/uv"),
+        patch.object(ltx, "RUNTIME_DIR", runtime),
+        patch.object(ltx, "MODEL_PATH", model),
+        patch.object(ltx.subprocess, "run", side_effect=completed) as run,
+    ):
+        ltx.generate_video("x", str(output), verbose=False, **kwargs)
+    return run.call_args.args[0], run.call_args.kwargs.get("env", {})
+
+
+def _image_args(cmd):
+    idx = [i for i, a in enumerate(cmd) if a == "--image"]
+    return [cmd[i + 1:i + 5] for i in idx]
+
+
+def test_image_crf_is_passed_per_image_without_runtime_patch(tmp_path):
+    cmd, env = _cmd_for(tmp_path, image=str(tmp_path / "start.png"))
+    assert _image_args(cmd)[0][1:4] == ["0", "1.0", "0"]
+    assert "LTX_IMAGE_CRF" not in env
+
+
+def test_keyframe_images_both_get_lossless_crf(tmp_path):
+    cmd, _ = _cmd_for(tmp_path, image=str(tmp_path / "start.png"), end_image=str(tmp_path / "end.png"), frames=49)
+    args = _image_args(cmd)
+    assert args[0][1:4] == ["0", "1.0", "0"]
+    assert args[1][1:4] == ["48", "1.0", "0"]
+
+
 def test_preset_cas_reaches_sharpening(tmp_path):
     output = tmp_path / "clip.mp4"
     runtime, model = tmp_path / "runtime", tmp_path / "model"
