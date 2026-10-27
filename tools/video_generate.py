@@ -34,6 +34,19 @@ from typing import Any
 
 TOOLKIT_ROOT = Path(__file__).resolve().parent.parent
 
+LOCAL_PROFILE_PRESETS = {
+    "STANDARD": "STANDARD",
+    "HERO": "MAXIMAL",
+}
+DEFAULT_LOCAL_PROFILE = "HERO"
+
+# Higher-resolution source material needs less synthetic edge contrast. These
+# values deliberately stay below the former global 0.6 setting to avoid halos.
+LOCAL_PROFILE_CAS = {
+    "STANDARD": 0.45,
+    "HERO": 0.35,
+}
+
 # Model metadata and approximate pricing (USD per second)
 TIER_MODELS = {
     "draft": {
@@ -103,6 +116,13 @@ MODEL_RATES = {
 }
 
 
+def _resolve_duration(tier: str, requested: int | None) -> int:
+    """Use the measured 2 s local sweet spot without shortening cloud defaults."""
+    if requested is not None:
+        return requested
+    return 2 if tier == "draft" else 5
+
+
 def _estimate_cost(model: str, duration: int, has_ref_video: bool = False) -> dict[str, Any]:
     tier = MODEL_TO_TIER.get(model, "cloud")
     rate = MODEL_RATES.get(model, TIER_MODELS[tier]["cost_per_sec"])
@@ -119,7 +139,7 @@ def _estimate_cost(model: str, duration: int, has_ref_video: bool = False) -> di
     }
 
 
-def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
+def _run_local_hardware_sharpen(input_path: str, output_path: str, *, cas: float = 0.45) -> bool:
     """Run Apple Silicon VideoToolbox Lanczos 1080p scaling + Contrast Adaptive Sharpening (CAS).
     
     This pass runs locally in ~0.3s on Apple Silicon at 0,00 $ cost, removing typical LTX softness.
@@ -129,12 +149,14 @@ def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
         print("Warning: ffmpeg not found, skipping local hardware sharpening.", file=sys.stderr)
         return False
 
-    # Filter: Scale keeping aspect ratio (1080p target) + CAS (0.6) + light unsharp mask
-    # Handles both 16:9 landscape and 9:16 vertical automatically
+    # LTX's 64 px inference grid makes the STANDARD canvas 768x448 (12:7),
+    # slightly taller than 16:9. Crop only the excess edge before scaling so
+    # the advertised delivery is exactly 1920x1080 rather than 1920x1120.
     vf_filter = (
-        "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos:param0=3,"
-        "cas=0.6,"
-        "unsharp=5:5:0.5:3:3:0.2"
+        "crop='if(gt(iw/ih,16/9),ih*16/9,iw)':'if(gt(iw/ih,16/9),ih,iw*9/16)',"
+        "scale=1920:1080:flags=lanczos+accurate_rnd+full_chroma_int,"
+        f"cas={cas},"
+        "unsharp=3:3:0.20:3:3:0.0"
     )
 
     cmd = [
@@ -147,7 +169,9 @@ def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
         "-c:v",
         "h264_videotoolbox",
         "-b:v",
-        "20M",
+        "24M",
+        "-profile:v",
+        "high",
         "-color_primaries",
         "bt709",
         "-color_trc",
@@ -160,7 +184,7 @@ def _run_local_hardware_sharpen(input_path: str, output_path: str) -> bool:
     ]
 
     print(
-        f"[Local Hardware Sharpen] Apple Silicon VideoToolbox (CAS 0.6 + Lanczos 1080p, 0 €)...",
+        f"[Local Hardware Sharpen] Apple Silicon VideoToolbox (CAS {cas} + Lanczos 1080p, 0 €)...",
         file=sys.stderr,
     )
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -178,10 +202,12 @@ def _run_ltx_draft(
     continue_from: str | None = None,
     lora: str | None = None,
     lora_strength: float = 1.0,
-    frames: int = 97,
+    frames: int = 49,
     fps: int = 24,
-    mode: str = "two-stage",
+    mode: str = "distilled",
+    local_profile: str = DEFAULT_LOCAL_PROFILE,
 ) -> int:
+    preset = LOCAL_PROFILE_PRESETS[local_profile]
     adapter = TOOLKIT_ROOT / "tools" / "ltx25_mlx_adapter.py"
     cmd = [
         sys.executable,
@@ -190,12 +216,17 @@ def _run_ltx_draft(
         prompt,
         "--output",
         output_path,
+        "--preset",
+        preset,
         "--frames",
         str(frames),
         "--frame-rate",
         str(fps),
         "--mode",
         mode,
+        # This dispatcher owns the single final CAS pass below. Avoid applying
+        # sharpening twice, which creates halos and wastes a VideoToolbox encode.
+        "--no-sharpen",
     ]
     if image:
         cmd += ["--image", image]
@@ -351,7 +382,19 @@ def main() -> int:
         default="auto",
         help="LTX-2.5 motion trajectory profile (steady-workspace: DEV 40-step focus; occlusion-recovery: Distilled focus)",
     )
-    parser.add_argument("--duration", "-d", type=int, default=5, help="Clip duration in seconds (default: 5)")
+    parser.add_argument(
+        "--duration",
+        "-d",
+        type=int,
+        default=None,
+        help="Clip duration (default: 2 s local, 5 s cloud)",
+    )
+    parser.add_argument(
+        "--local-profile",
+        choices=sorted(LOCAL_PROFILE_PRESETS),
+        default=DEFAULT_LOCAL_PROFILE,
+        help="Local M4 Pro profile: HERO quality-first default or STANDARD for speed",
+    )
     parser.add_argument("--resolution", "-r", help="Resolution (e.g. 720p, 1080p, 2k)")
     parser.add_argument("--aspect-ratio", help="Aspect ratio (e.g. 16:9, 9:16)")
     parser.add_argument(
@@ -374,6 +417,7 @@ def main() -> int:
         tier = "draft"
         model = "ltx25"
 
+    args.duration = _resolve_duration(tier, args.duration)
     cost_info = _estimate_cost(model, args.duration, bool(args.ref_video))
 
     # Safety Gate: Paid generation requires explicit confirmation
@@ -413,6 +457,7 @@ def main() -> int:
             lora=args.lora,
             lora_strength=args.lora_strength,
             frames=frames,
+            local_profile=args.local_profile,
         )
         if rc != 0:
             return rc
@@ -420,7 +465,11 @@ def main() -> int:
         # Optimized Local Sharpening Step (0 € via Apple VideoToolbox CAS)
         crisp_output = str(Path(args.output).with_suffix("")) + "_crisp.mp4"
         if not args.no_local_sharpen:
-            ok = _run_local_hardware_sharpen(args.output, crisp_output)
+            ok = _run_local_hardware_sharpen(
+                args.output,
+                crisp_output,
+                cas=LOCAL_PROFILE_CAS[args.local_profile],
+            )
             if ok:
                 active_result = crisp_output
             else:
@@ -452,10 +501,10 @@ def main() -> int:
             f"     oder via Higgsfield:\n"
             f"     uv run tools/video_generate.py --provider higgsfield --model minimax_h3 --ref-video {active_result} --confirm\n"
             f"----------------------------------------------------------\n"
-            f"KINEMATISCHE DRAFT- & MASTERING-RICHTLINIE (LTX 2.5 SOTA):\n"
-            f"• Ruhige Interaktion / Feinarbeit: DEV-Pfad (40 Steps, CFG 3.5, stabilerer Workspace)\n"
-            f"• Dynamische Szene / Verdeckung: Distilled-Pfad (8-12 Steps, überlegene Re-Identifikation)\n"
-            f"• HDR-Finishing: LTX-2.5 SDR-to-HDR IC-LoRA (streaming encode ON, ACEScg -> 10-Bit HLG BT.2020)\n"
+            f"M4-PRO-24-GB-PROFIL:\n"
+            f"• Distilled Q8 + Low-RAM, 768×448 und kurze 49-Frame-Shots.\n"
+            f"• Längere Sequenzen über Endframe-Fortsetzung statt DEV/HQ-Gewichte.\n"
+            f"• Genau ein lokaler CAS-Pass erzeugt den geschärften 1080p-Clip.\n"
             f"==========================================================\n",
             file=sys.stderr,
         )

@@ -124,3 +124,10 @@ playwright/recordings/*.mp4
 
 # Kiro CLI generated skills/steering (scripts/migrate_to_kiro.py)
 .kiro/
+
+# HyperFrames transient preview & media caches
+**/.thumbnails/
+**/.waveform-cache/
+**/.hyperframes/preview/
+**/.hyperframes/artifacts/
+**/.hyperframes/

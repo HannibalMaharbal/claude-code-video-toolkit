@@ -112,7 +112,7 @@ VIDEO_QUALITY_PRESETS = {
     "STANDARD": {
         "width": 768,
         "height": 448,
-        "frames": 97,
+        "frames": 49,
         "frame_rate": 24,
         "mode": "distilled",
         "cas": 0.45,
@@ -292,7 +292,7 @@ def generate_video(
     mode: str = "distilled",
     width: int = 768,
     height: int = 448,
-    frames: int = 97,
+    frames: int = 49,
     frame_rate: int = 24,
     seed: int | None = None,
     image: str | None = None,

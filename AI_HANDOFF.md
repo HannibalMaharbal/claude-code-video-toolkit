@@ -1,3 +1,23 @@
+## Nachtrag — LTX-2.5 Distilled 1080p-Finishing korrigiert
+
+- Datum: 2026-10-26. Schreibender Agent: Codex 1. Direkter Nutzerauftrag:
+  verbleibende Geschwindigkeits-, Qualitäts- und Produktionsreife-Lücken prüfen
+  und belegbare Verbesserungen umsetzen. Kein Commit, Push oder Cloud-Aufruf.
+- Befund: Der Dispatcher bezeichnete den STANDARD-Finishing-Pass als 1080p,
+  skalierte den 768×448-Rohcanvas aber tatsächlich proportional auf 1920×1120.
+  Zusätzlich nutzte er global CAS 0,6 plus starkes Unsharp und ignorierte die
+  bereits kalibrierten Profilwerte; das erhöhte das Risiko sichtbarer Halos.
+- Korrektur: minimaler zentrierter 16:9-Beschnitt vor exakt 1920×1080,
+  hochwertiger Lanczos-Pass, 24 Mbit/s High Profile und profilabhängiges CAS
+  (STANDARD 0,45; HERO 0,35) mit deutlich schwächerem Unsharp. Weiterhin genau
+  ein Hardware-Finishing-Pass, daher keine zusätzliche Inferenzzeit.
+- Evidenz: 17 fokussierte Tests, Python-Compile und `git diff --check` PASS.
+  Reales M4-Pro-VideoToolbox-Smoke-Rendering aus 768×448 inklusive AAC bestand;
+  `ffprobe` bestätigte H.264 1920×1080 und erhaltenes AAC 48 kHz.
+- Nutzerpriorität nach der technischen Optimierung: Qualität vor Geschwindigkeit.
+  Daher ist `HERO` (1024×576 Distilled Q8) jetzt der Dispatcher-Default;
+  `STANDARD` (768×448) bleibt explizit als schnellere lokale Option verfügbar.
+
 ## Nachtrag — HYPERFRAMES-POC-01 auf 5-Sterne-Stand gehärtet
 
 - Datum: 2026-10-26. Schreibender Agent: Codex 1. Direkter Folgeauftrag:
@@ -873,3 +893,90 @@ Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentatio
   - CLI & Cost-Estimation Smoke-Tests für `seedance_2_mini` und `--motion-profile` erfolgreich validiert.
   - Hannibal Pre-Commit Check & Identity Check PASS.
 - **Nächste Schritte / Reviewer:** Unabhängiges Review durch Codex / Hannibal Freigabe für Git Push.
+
+### 2026-10-26 — HYPERFRAMES-POC-01 lokal gehärtet und reproduzierbar gemacht
+
+- **Schreiber:** Codex 1. Branch: `audit/claude-review`. Arbeitsverzeichnis:
+  `hyperframes-test/`. Keine neue Commit- oder Push-Freigabe in diesem Schritt.
+- Die tatsächlich verwendeten drei Soundeffekte liegen nun unter stabilen,
+  semantischen Pfaden in `assets/sfx/`; die Komposition referenziert keine
+  generierten `.media`-Cachepfade mehr.
+- Neue lokale Qualitätsroute: `npm run check:strict`, `npm run review`,
+  `npm run render:delivery`, `npm run verify:render` und `npm run release:local`.
+  Delivery-Dateien werden versioniert und nicht überschrieben.
+- Die Serifenschrift verwendet ausschließlich das gebündelte WOFF2-Asset. Der
+  unnötige Google-Fonts-Resolver wurde dadurch aus Check und Render entfernt;
+  alle Runtime-Medien bleiben lokal.
+- Verifikation: HyperFrames 0.8.189 meldet 0 Fehler, 0 Warnungen und 17/17
+  bestandene Kontrastproben. Der neue Render
+  `renders/licbarska-consult-b2b-delivery-v3-15s.mp4` besitzt 1920×1080,
+  H.264/AAC, 30 fps, 450 Frames und exakt 15,000 s.
+- Regressionsnachweis: SHA-256 des neuen und bisherigen Referenz-MP4 ist jeweils
+  `829b827605ad077981545ab8610ed81eadafa7637cf29bf8dc5c2bfa76312880`;
+  zusätzlich stimmen dekodierte Video-Frame- und PCM-Audio-Prüfsummen überein.
+  Bild, Timing und Ton blieben damit vollständig erhalten.
+- Status: lokal gespeichert und technisch selbstverifiziert. Unabhängige
+  Hannibal-/Antigravity-Abnahme bleibt das Vier-Augen-Release-Gate. Änderungen
+  dieses Nachtrags sind bewusst noch nicht committed oder gepusht.
+
+### 2026-10-26 — LTX-2.5 bleibt bewusst schlank statt 29,5-GB-HQ-Erweiterung
+
+- **Entscheidung Hannibal:** Keine zusätzlichen DEV-/HQ-Gewichte installieren;
+  der vorhandene Distilled-Q8-Pfad mit lokalem CAS-Finishing bleibt Standard.
+- Die frühere Meldung „HQ-Download abgeschlossen“ war falsch positiv: Der
+  Hugging-Face-Prozess war vorzeitig beendet worden, aber eine nachgeschaltete
+  `tail`-Pipeline maskierte den Fehler mit Exit-Code 0. Die geforderten Dateien
+  `transformer-dev.safetensors` und
+  `ltx-2.5-22b-distilled-lora-450.safetensors` waren nicht vorhanden.
+- Ein erneuter Download wurde auf Nutzerwunsch nach weniger als einer Minute
+  abgebrochen. Die einzige neue `.incomplete`-Datei war 63 KB groß und wurde
+  entfernt. Modellbestand weiterhin rund 35 GB; freier Speicher 189 GiB.
+- Der schlanke Pfad ist real belegt: STANDARD 97 Frames in 235 s und STANDARD
+  145 Frames in 371 s; letzterer liefert 768×448, 24 fps, 145 Frames, 6,042 s,
+  H.264 plus AAC. Gemessene Systemspitze 21,57/24 GB bestätigt, dass zusätzliche
+  HQ-Inferenz auf diesem Rechner keinen sinnvollen Alltagsstandard darstellt.
+- Regression: 26 fokussierte LTX-/Preset-/Mehrclip-Tests bestanden. HQ-Modi
+  bleiben im Adapter fail-closed, solange `transformer-dev.safetensors` fehlt.
+- Bewertung: **5/5 für den lokalen, kostenfreien Produktions-Workflow**
+  (Offline, deterministisch, Endframe-Fortsetzung, Audio, CAS-Finishing,
+  RAM-Schutz); die rohe generative Bildqualität des Distilled-Modells bleibt
+  ehrlich unter Cloud-Hero-Modellen und wird nicht als DFR/HQ ausgegeben.
+
+### 2026-10-26 — LTX-2.5 auf M4 Pro/24 GB durchgängig optimiert
+
+- **Schreiber:** Codex 1. Ziel: Alle lokalen Standard-Einstiege an den real
+  gemessenen Sweet Spot des MacBook Pro M4 Pro mit 24 GB Unified Memory binden.
+- `STANDARD` und der direkte Adapter-Default verwenden jetzt 768×448,
+  Distilled Q8, 24 fps und 49 Frames. Explizite längere Framezahlen bleiben
+  möglich; `MAXIMAL` bleibt ein bewusster 1024×576-Testpfad.
+- Der zentrale `video_generate.py`-Dispatcher rief vorher standardmäßig
+  `two-stage` auf, obwohl die dazu nötigen DEV-Gewichte bewusst nicht
+  installiert sind. Der lokale Default ist jetzt korrekt `distilled` und
+  übergibt explizit das `STANDARD`-Profil.
+- Doppelte Schärfung entfernt: Der Dispatcher lässt den Adapter roh rendern
+  (`--no-sharpen`) und führt danach genau einen VideoToolbox-CAS-Pass aus.
+  Dadurch entfallen eine unnötige Hardware-Neukodierung und zusätzliche
+  Schärfehalos. Die Master-Pipeline, die den Adapter direkt verwendet, behält
+  weiterhin genau ihren eigenen einzelnen CAS-Pass.
+- Nutzerhinweise nennen keine nicht installierten DEV-/HDR-Pfade mehr, sondern
+  das aktive M4-Pro-Profil und Endframe-Fortsetzung für längere Sequenzen.
+- Verifikation: 27 fokussierte Adapter-, Preset-, Dispatcher- und Mehrclip-Tests
+  bestanden; Python-Kompilierung und `git diff --check` bestanden. Der breite
+  Ruff-Check bleibt wegen zahlreicher bereits vorhandener Formatbefunde in den
+  betroffenen Dateien nicht grün; keine neue Laufzeitregression festgestellt.
+- Keine neuen Modelle, Downloads oder Kosten; kein Commit oder Push.
+
+### 2026-10-26 — Zwei lokale LTX-Produktionsprofile aktiviert
+
+- `video_generate.py` akzeptiert jetzt `--local-profile STANDARD|HERO`.
+  Die Profile verwenden die vorhandenen, gemessenen Adapter-Presets:
+  STANDARD → STANDARD 768×448 und HERO → MAXIMAL 1024×576. Beide bleiben
+  Distilled Q8, Low-RAM, 24 fps und standardmäßig
+  49 Frames; explizite Dauerangaben bleiben möglich.
+- Ohne `--duration` gilt lokal der gemessene 2-Sekunden-/49-Frame-Sweet-Spot;
+  Cloud-Aufrufe behalten ihren bisherigen 5-Sekunden-Default.
+- STANDARD ist rückwärtskompatibler Default. HERO lädt kein weiteres Modell
+  und wird nur für ausgewählte Finalshots verwendet.
+- Die Bedienung ist in `docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`
+  dokumentiert. 29 fokussierte Tests, Python-Kompilierung und Diff-Check
+  bestanden. Keine Downloads, Kosten, Commits oder Pushes.

@@ -29,7 +29,7 @@ def test_preset_supplies_defaults_when_not_given():
 
 def test_no_preset_defaults_to_standard_grid():
     s = _settings(["--prompt", "x", "--output", "o.mp4"])
-    assert (s.width, s.height) == (768, 448)
+    assert (s.width, s.height, s.frames, s.mode) == (768, 448, 49, "distilled")
 
 
 def test_every_preset_is_on_the_64px_grid_and_8k_plus_1():
@@ -43,6 +43,7 @@ def test_generate_video_default_resolution_is_on_64px_grid():
     sig = inspect.signature(ltx.generate_video)
     assert sig.parameters["width"].default % 64 == 0
     assert sig.parameters["height"].default % 64 == 0
+    assert sig.parameters["frames"].default == 49
 
 
 @pytest.mark.parametrize("w,h", [(704, 480), (480, 704), (512, 288)])

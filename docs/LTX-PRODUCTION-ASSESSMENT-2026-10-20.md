@@ -1,5 +1,27 @@
 # LTX für kontrollierte lokale Videoproduktion
 
+## M4 Pro mit 24 GB: kalibrierte lokale Profile
+
+Der zentrale Dispatcher bietet zwei Distilled-Q8-Profile. `HERO` ist der
+qualitätsorientierte Default; `STANDARD` bleibt die schnellere Option. Längere Sequenzen werden bevorzugt aus kurzen, per Endframe
+fortgesetzten Shots aufgebaut.
+
+```bash
+# Schnellere Produktion: 768×448
+uv run tools/video_generate.py --local-profile STANDARD --prompt "..." --output standard.mp4
+
+# Qualitätsorientierter Default: 1024×576
+uv run tools/video_generate.py --local-profile HERO --prompt "..." --output hero.mp4
+```
+
+Beide Profile verwenden lokal Distilled Q8, Low-RAM und genau einen
+abschließenden VideoToolbox-CAS-Pass. Der STANDARD-Rohcanvas wird dabei nach
+einem minimalen zentrierten 16:9-Beschnitt exakt auf 1920×1080 ausgegeben;
+profilabhängiges CAS (STANDARD 0,45, HERO 0,35) vermeidet die Halos der früheren
+globalen Stärke 0,6. HERO verbessert Details, ist auf diesem
+Host aber deutlich langsamer; es ist kein anderer Transformer und kein Ersatz
+für den offiziellen DFR-Produktionspfad.
+
 Stand: 20. Oktober 2026
 
 ## Produktionsrelevante Stärken
