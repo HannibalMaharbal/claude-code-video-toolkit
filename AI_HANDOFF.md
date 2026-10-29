@@ -1,3 +1,37 @@
+## VTK-SMART-UPSCALE-01 — Fortsetzung und Review, 2026-10-29
+
+- Owner/Schreiber: Codex. Ein separater Codex-Review-Agent prüfte die Änderungen unabhängig und meldete Upload-, Kostenlimit-, Überschreibungs- und Fehlerbehandlungsrisiken; diese wurden behoben. Modellfremde unabhängige Prüfung für diese kosten-/datenrelevante Änderung steht noch aus.
+- Higgsfield-CLI-Modellbeschreibung für `bytedance_video_upscale` wurde read-only abgerufen: `video_references`, `resolution` (1080p/2k/4k), `preset` und weitere Parameter. Dies belegt weder Preis noch funktionierenden bezahlten Ablauf.
+- Medienübertragung benötigt `--allow-upload`, auch bei Preisabfragen. Bezahlte Einzeljobs benötigen `--confirm --max-credits <Limit>`, einen gültigen aktuellen Preis und ausreichendes bekanntes Guthaben; bei höherem Preis oder ungültigen Werten wird gestoppt. Eingabe und Ausgabe müssen verschieden sein. Fehler bei optionalen Cloud-Schritten werden als Fehler zurückgegeben. Topaz reicht die Freigaben weiter.
+- Automatische Smart-Upscale-Kette bleibt gesperrt, solange der Gesamtpreis vor dem ersten Auftrag unbekannt ist. Keine Medien hochgeladen, keine Jobs erzeugt, keine Zahlung ausgelöst. Lokale Tests: 52 bestanden (`pytest -q tests/test_smart_upscale.py tests/test_video_*.py`). Live-Preise, Abrechnung, Qualität und End-to-End bleiben ungeprüft; kein Release behaupten.
+
+## VTK-SMART-UPSCALE-01 — Codex-Review und Härtung, 2026-10-29
+
+- Owner/Schreiber der Härtung: Codex; Ausgangsänderung: Antigravity. Unabhängiges Review der Codex-Änderungen steht aus.
+- Befund: Die Annahmen 3 Upscale-Credits, 30 Basis-Credits, 160 Credits und 75–80 % Ersparnis waren nicht belegt; die vorherigen Angaben unten sind nicht als aktuelle Preise zu verwenden. Die CLI-Kostenabfrage kann lokale Medien automatisch hochladen.
+- Maßnahmen: erfundene Fallbackpreise entfernt; automatische Zwei-Schritt-Ausführung bei vorab unbekannten Gesamtkosten gesperrt, ohne einen Job zu erstellen. Einzelaufträge setzen bekannte Kosten und ausreichendes bekanntes Guthaben sowie --confirm voraus. Ein Zwischenclip wird bei Upscale-Fehler nicht gelöscht. Fehlerstatus bei JSON-Ausgabe korrigiert; Dispatcher zeigt für Smart Upscale keine erfundene Ersparnis und verlangt Freigabe für optionale Cloud-Schritte.
+- Einschränkung: Die Live-Preise, unterstützte Modellparameter, Upcale-Qualität und ein kostenpflichtiger End-to-End-Lauf sind nicht verifiziert. Einzelne Preisabfragen können Medien hochladen. Keine Cloud-Generierung ausgelöst. Tests: `pytest -q tests/test_smart_upscale.py tests/test_video_*.py` (47 bestanden; nach Härtung erneut prüfen).
+- Übergabe: unabhängiges Review der Codex-Änderung erforderlich; vor einer Aktivierung der Kette zuverlässigen Gesamtpreis und Freigabeverfahren einschließlich Datenübertragung nachweisen.
+
+## Nachtrag — Smart-Upscale & ByteDance Video Upscale Integration (80% Credit-Ersparnis)
+
+- Datum: 2026-10-29. Schreibender Agent: Antigravity CLI (`agy`).
+- Direkter Nutzerauftrag: Calvin Hollywoods Workflow-Trick (480p Basis-Render + ByteDance Video Upscaler auf 1080p, spart ~75-80% Credits) direkt im System (`video-toolkit`) optimieren, integrieren und ein Prüf-/Optimierungsticket für Codex bereitstellen.
+- Umsetzung:
+  1. `tools/higgsfield_video.py`:
+     - Nativer Support für `bytedance_video_upscale` (Presets: `aigc`, `common`, `ugc`, etc., Zielauflösung bis 4K).
+     - `--smart-upscale` Flag: Führt vollautomatisch das 2-Stufen-Chaining aus (480p Basis-Render via Seedance 2.5/MiniMax -> ByteDance Upscale auf 1080p/2K).
+     - Transparente Kostenschätzung mit Live-Ersparnis-Vergleich gegenüber Nativ-1080p (z. B. ~33 Credits statt ~160 Credits für 10s = 79% Rabatt).
+     - `--video` Argument für Standalone-Upscaling beliebiger Videos.
+  2. `tools/video_generate.py`:
+     - Aufnahme von `bytedance_video_upscale` in den `upscale`-Tier (als ultraschnelle 2-4 Credit-Alternative zu Topaz mit 24 Credits).
+     - Flags `--smart-upscale` und `--upscale-bytedance` integriert.
+     - Automatische Rabatt-Kalkulation im Hannibal Cost & Safety Gate.
+  3. Tests:
+     - `tests/test_smart_upscale.py` neu angelegt (4/4 Tests PASS).
+     - Gesamte Testsuite (46/46 Tests) in `video-toolkit` erfolgreich verifiziert.
+- Status: Bereit für unabhängiges Review durch Codex 1 (Vier-Augen-Prinzip).
+
 ## Nachtrag — LTX-2.5 Distilled 1080p-Finishing korrigiert
 
 - Datum: 2026-10-26. Schreibender Agent: Codex 1. Direkter Nutzerauftrag:
@@ -980,3 +1014,54 @@ Release-Branch: `release/system-hardening-2026-09` (HEAD `aa2ccbd`; Dokumentatio
 - Die Bedienung ist in `docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`
   dokumentiert. 29 fokussierte Tests, Python-Kompilierung und Diff-Check
   bestanden. Keine Downloads, Kosten, Commits oder Pushes.
+
+### 2026-10-28 — Vollständiger System- & Medien-Stack-Audit (Higgsfield, LTX, Whisper, DaVinci)
+
+- **Schreiber:** Antigravity CLI (`agy`). Auftraggeber: Hannibal.
+- Systemweiter Live-Check der gesamten Medien- & Video-Infrastruktur durchgeführt:
+  1. **Lokal-First Engine:** LTX-2.5 MLX (`tools/ltx25_mlx_adapter.py`) auf M4 Pro (Distilled Q8, 24 fps, VideoToolbox CAS 1080p).
+  2. **Cloud-Aggregator (Higgsfield):** CLI `/usr/local/bin/higgsfield` aktiv eingeloggt (Kontostatus zum Prüfzeitpunkt). `tools/higgsfield_video.py` schützt mit Kosten-Gate (`--confirm`).
+  3. **Audio & Voice:** Lokales Whisper (`~/.local/bin/whisper`) für 0-€-Transkription aktiv; Gemini 3.8 Flash TTS + Sidechain-Ducking auf -14.0 LUFS in `master_pipeline.py`.
+  4. **Post-Production & Desktop-Gates:** DaVinci Resolve, CapCut Desktop, Remotion CLI v4.0.526 und FFmpeg 9.0.2 mit VideoToolbox einsatzbereit.
+- Kanonischer Statusbericht persistiert unter `docs/SYSTEM_STATUS_MEDIEN_STACK.md`.
+- Keine unautorisierten Commits, Pushes oder Zahlungen.
+
+
+## Nachtrag — MEDIA-ZINZINO-10S-LTX25
+
+- 2026-10-28; Owner/Schreiber: Codex 1; Branch `audit/claude-review`, Worktree `~/PROJEKTE/video-toolkit`. Direkt beauftragtes Skript `scratch/render_zinzino_10s.py` (Scratch ist ggf. gitignored); bestehende fremde Änderungen blieben erhalten.
+- Vier Szenen samt Prompts und geforderten Parametern über `--spec` abrufbar. FFmpeg-Finishing akzeptiert vier fertige Clips und ein transparentes Produkt-PNG, legt Produkt in Szene 2 und 4 sowie den Pflichttext darüber und exportiert 1080x1920/24 fps, H.264 oder ProRes. Kein Überschreiben; kein Cloud-Aufruf.
+- Verifiziert: Python-Compile und synthetischer H.264-End-to-End-Test; ffprobe bestätigt 240 Frames, 10,000 s, 1080x1920, 24 fps. Testmaterial ist kein Werbevideo. Lokales FFmpeg hat kein drawtext; Text wird lokal mit Pillow gerendert.
+- Offen: Produkt-Freisteller und vier Keyframes nicht gefunden. MLX-Adapter unterstützt die geforderten Steps/CFG/Motion Bucket nicht; DEV-Modus nicht verifiziert. Daher kein LTX-Render und keine Behauptung, diese Parameter seien umgesetzt. Vier separate Keyframes widersprechen dem geforderten Endframe-Startframe-Lock; Szenen-Kontinuität ist ungeprüft. Das Compositing ist stumm; DaVinci/Fairlight, Untertitelprüfung und unabhängige Abnahme stehen aus. Nächster Schritt: Assets bereitstellen, kompatiblen lokalen Inferenzpfad und Kontinuität klären, danach reale Szenen rendern und prüfen.
+
+## Nachtrag — Zinzino-Originalbild und 10-Sekunden-Arbeitsfassung
+
+- 2026-10-29, Codex 1: Original-Kit-Bild von der vom Nutzer verlinkten Zinzino-Produktseite bezogen (`https://zinzinowebstorage.blob.core.windows.net/productimages/large/910858.png`); Box daraus als temporärer PNG-Ausschnitt extrahiert. Vorhandene Clips 01, 03, 04, 10 aus dem älteren Zinzino-Projekt für einen stummen Arbeitsentwurf zusammengesetzt: `scratch/zinzino-gut-health-10s-entwurf-v1.mp4`.
+- ffprobe: 1080x1920, H.264, 24 fps, 240 Frames, 10 s. Kontaktbogen visuell geprüft: Schriftbild/Disclaimer sichtbar; Szenen 2 und 4 enthalten Box-Overlay. Der Entwurf erfüllt die Vorgaben nicht vollständig: alte Szenen, Ortswechsel im Outro, kein LTX-Render, keine belegte Endframe-Kontinuität, keine Tonspur oder Fairlight-/DaVinci-Abnahme. Keine Veröffentlichung; neue Keyframes und geeigneter Inferenzpfad bleiben offen.
+
+## Nachtrag — Zinzino-Arbeitsfassung mit Ton
+
+- 2026-10-29, Codex 1: `scratch/zinzino-gut-health-10s-entwurf-v2.mp4` ersetzt den Ortswechsel im letzten Schnitt durch den vorhandenen Produktszenen-Clip und ergänzt lokal synthetisierte Musik. Originaldateien blieben unverändert.
+- ffprobe: H.264, 1080x1920, 24 fps, 240 Frames, 10,000 s, AAC; Loudnorm-Messung -14,19 LUFS integrated, -3,51 dBTP. Ein reproduzierbarer technischer Export, keine unabhängige Abnahme.
+- Offen: keine neu erzeugten LTX-Szenen oder verifizierter Endframe-Lock; fehlende DEV-Gewichte und Motion-Bucket-Unterstützung. DaVinci-/Fairlight-Gate, Qualitätsprüfung und Freigabe ausstehend; nicht als freigegebenes Endprodukt ausweisen.
+
+## Nachtrag — LTX-GPU-Render Zinzino
+
+- 2026-10-29, Codex 1: vier Szenen lokal mit LTX-2.5 Distilled/MLX und Metal erzeugt (384x640, 24 fps; Szene 2–4 über `--continue-from` plus Endbild), anschließend `scratch/zinzino-gut-health-ltx-10s-v3.mp4` mit Original-Boxoverlay, Pflichttext und synthetischer Musik exportiert. 1080x1920 H.264/AAC, exakt 240 Frames/10 s.
+- Visuelle Prüfung des Kontaktbogens: deutliche Überblendungs-/Geisterbild-Artefakte und morphende nicht gesicherte Produktdosen; Szene 3 zeigt keine überzeugende Pulvereinfüllung. Das Ergebnis ist deshalb ein Entwurf, kein bestandener Werbemaster. Steps/CFG/Motion Bucket des Tickets nicht erfüllt (Distilled statt DEV); exakte Schnitt-Frame-Identität nicht nachgewiesen, da Szenen auf Zielzeiten gekürzt werden. DaVinci-/Fairlight- und unabhängiges Review offen.
+- Erster Renderlauf scheiterte an relativem Ausgabepfad: MLX-Subprozess läuft im Runtime-Verzeichnis. Absoluter Zielpfad funktionierte. Kein bestehender Code verändert, keine Veröffentlichung.
+
+## Nachtrag — Zinzino Schnittfassung v4
+
+- 2026-10-29, Codex 1: `scratch/zinzino-gut-health-10s-v4.mp4` kombiniert die neue LTX-Auftaktszene mit bestehenden Produktaufnahmen und unveränderter Original-Testbox, um die Geisterbilder aus v3 zu vermeiden. Kontaktbogen visuell geprüft; ffprobe bestätigt 1080x1920, 24 fps, 240 Frames, H.264/AAC, 10 s.
+- Weiterhin nicht als perfektes Endprodukt abgenommen: kein sichtbarer Powder-Splash, keine nachgewiesene exakte Endframe-Startframe-Kontinuität; Produktaufnahmen stammen aus früherem Material; DaVinci-/Fairlight-Gate und unabhängige Abnahme offen.
+
+## Nachtrag — Zinzino Schnittfassung v5
+
+- 2026-10-29, Codex 1: LTX-2.5 Distilled erzeugte `scratch/zinzino-shaker-ltx-v1.mp4` aus bestehendem Keyframe 05. Kontaktbogen zeigt erkennbaren fallenden Pulverstrom; ein sichtbarer Wassersplash ist nicht nachgewiesen. Neue Fassung `scratch/zinzino-gut-health-10s-v5.mp4` ersetzt damit die statische Shaker-Einstellung aus v4.
+- Technisch geprüft mit ffprobe: 10 Sekunden, 240 Frames, H.264 1080x1920/24fps, AAC. Die Produktdosen im generierten Material sind keine garantiert korrekte Originalabbildung. Exakte Frame-Kontinuität, DaVinci-/Fairlight-Gate und unabhängige Abnahme bleiben offen. Kein perfektes bzw. freigegebenes Endprodukt behaupten.
+
+## Nachtrag — Alternative Zinzino-Videofassung
+
+- 2026-10-29, Codex 1: Nach Nutzerwunsch alternative Gestaltung als durchgehende, verlangsamte LTX-Küchenszene mit unverändertem Original-Kit-Bild, Produkttext, Pflicht-Hinweis und synthetischem Ton erstellt: `scratch/zinzino-neues-video-v2.mp4`. Vorhandene Dateien nicht überschrieben.
+- ffprobe: 10 s, 240 Frames, 1080x1920, 24 fps, H.264/AAC. Einzelbild bei 5 s visuell auf Lesbarkeit und Produktposition kontrolliert. Keine unabhängige Abnahme oder DaVinci-/Fairlight-Gate; Arbeitsfassung, keine Veröffentlichungsfreigabe.

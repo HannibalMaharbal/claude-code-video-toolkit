@@ -81,10 +81,10 @@ TIER_MODELS = {
     },
     "upscale": {
         "default": "topaz_hyperion_2_5",
-        "models": ["topaz_hyperion_2_5", "topaz_video", "video_upscale"],
+        "models": ["topaz_hyperion_2_5", "topaz_video", "bytedance_video_upscale", "video_upscale"],
         "cost_per_sec": 0.08,
         "locality": "cloud",
-        "description": "Topaz AI Cloud Upscaler / Sharpening (schärft weiche LTX-2.5 Entwürfe)",
+        "description": "AI Cloud Upscaler / Sharpening (Topaz AI & ByteDance Upscaler)",
     },
 }
 
@@ -103,6 +103,7 @@ MODEL_TO_TIER = {
     "seedance_2_0": "premium",
     "topaz_hyperion_2_5": "upscale",
     "topaz_video": "upscale",
+    "bytedance_video_upscale": "upscale",
     "video_upscale": "upscale",
 }
 
@@ -260,7 +261,10 @@ def _run_cloud_generation(
     duration: int = 5,
     resolution: str | None = None,
     aspect_ratio: str | None = None,
+    smart_upscale: bool = False,
     confirm: bool = False,
+    max_credits: float | None = None,
+    allow_upload: bool = False,
 ) -> int:
     if provider == "direct":
         provider_script = TOOLKIT_ROOT / "tools" / "direct_video_provider.py"
@@ -289,9 +293,15 @@ def _run_cloud_generation(
         cmd += ["--resolution", resolution]
     if aspect_ratio:
         cmd += ["--aspect-ratio", aspect_ratio]
+    if smart_upscale and provider == "higgsfield":
+        cmd.append("--smart-upscale")
     if confirm:
         cmd.append("--confirm")
 
+    if provider == "higgsfield" and max_credits is not None:
+        cmd += ["--max-credits", str(max_credits)]
+    if provider == "higgsfield" and allow_upload:
+        cmd.append("--allow-upload")
     if ref_video:
         print(
             f"[Reference Guidance] Verwende LTX-Vorlage '{ref_video}' als Bewegungsanker für {model}.",
@@ -304,12 +314,48 @@ def _run_cloud_generation(
             file=sys.stderr,
         )
 
-    print(f"[Cloud Execution] Route: Provider={provider.upper()} | Model={model}", file=sys.stderr)
+    print(f"[Cloud Execution] Route: Provider={provider.upper()} | Model={model} | SmartUpscale={smart_upscale}", file=sys.stderr)
     proc = subprocess.run(cmd)
     return proc.returncode
 
 
-def _run_topaz_upscale(input_path: str, output_path: str, confirm: bool = False) -> int:
+def _run_bytedance_upscale(
+    input_path: str,
+    output_path: str,
+    resolution: str = "1080p",
+    preset: str = "aigc",
+    confirm: bool = False,
+    max_credits: float | None = None,
+    allow_upload: bool = False,
+) -> int:
+    hf_video = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
+    cmd = [
+        sys.executable,
+        str(hf_video),
+        "--model",
+        "bytedance_video_upscale",
+        "--video",
+        input_path,
+        "--output",
+        output_path,
+        "--resolution",
+        resolution,
+        "--preset",
+        preset,
+    ]
+    if confirm:
+        cmd.append("--confirm")
+
+    if max_credits is not None:
+        cmd += ["--max-credits", str(max_credits)]
+    if allow_upload:
+        cmd.append("--allow-upload")
+    print(f"[ByteDance Upscale] Skaliere via ByteDance AI ({resolution}, {preset})...", file=sys.stderr)
+    proc = subprocess.run(cmd)
+    return proc.returncode
+
+
+def _run_topaz_upscale(input_path: str, output_path: str, confirm: bool = False, max_credits: float | None = None, allow_upload: bool = False) -> int:
     hf_video = TOOLKIT_ROOT / "tools" / "higgsfield_video.py"
     cmd = [
         sys.executable,
@@ -326,6 +372,10 @@ def _run_topaz_upscale(input_path: str, output_path: str, confirm: bool = False)
     if confirm:
         cmd.append("--confirm")
 
+    if max_credits is not None:
+        cmd += ["--max-credits", str(max_credits)]
+    if allow_upload:
+        cmd.append("--allow-upload")
     print(f"[Topaz Sharpening] Skaliere und schärfe LTX-Entwurf via Topaz Hyperion 2.5...", file=sys.stderr)
     proc = subprocess.run(cmd)
     return proc.returncode
@@ -371,6 +421,16 @@ def main() -> int:
         help="Additionally upscale with Topaz AI in the cloud right after local generation",
     )
     parser.add_argument(
+        "--upscale-bytedance",
+        action="store_true",
+        help="Additionally upscale with ByteDance AI in the cloud right after local generation (cost depends on provider)",
+    )
+    parser.add_argument(
+        "--smart-upscale",
+        action="store_true",
+        help="Calvin Hollywood Trick: Render base at 480p, then upscale with ByteDance to 1080p (pricing depends on provider)",
+    )
+    parser.add_argument(
         "--no-local-sharpen",
         action="store_true",
         help="Skip the automatic local VideoToolbox CAS 1080p sharpening pass",
@@ -404,6 +464,8 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="Output execution metadata as JSON")
 
+    parser.add_argument("--allow-upload", action="store_true", help="Allow Higgsfield media upload")
+    parser.add_argument("--max-credits", type=float, help="Maximum authorized credits")
     args = parser.parse_args()
 
     # Determine model and tier
@@ -419,9 +481,21 @@ def main() -> int:
 
     args.duration = _resolve_duration(tier, args.duration)
     cost_info = _estimate_cost(model, args.duration, bool(args.ref_video))
+    if model == "bytedance_video_upscale":
+        cost_info["estimated_cost_usd"] = None
+    if args.smart_upscale:
+        if args.provider != "higgsfield" or tier not in ("cloud", "premium"):
+            print("--smart-upscale benötigt ein Higgsfield-Cloudmodell.", file=sys.stderr)
+            return 1
+        cost_info["smart_upscale"] = True
+        cost_info["estimated_cost_usd"] = None
+    if tier == "draft" and (args.upscale_bytedance or args.upscale_topaz) and not args.confirm:
+        print("Cloud-Upscaling benötigt eine ausdrückliche Freigabe und vorherige Kostenprüfung.", file=sys.stderr)
+        return 1
 
     # Safety Gate: Paid generation requires explicit confirmation
     if tier != "draft" and not args.confirm:
+        smart_note = "Modus: Smart Upscale; Gesamtkosten und Ersparnis unbekannt.\n" if args.smart_upscale else ""
         cost_msg = (
             f"\n"
             f"=== HANNIBAL COST & SAFETY GATE ===\n"
@@ -430,13 +504,14 @@ def main() -> int:
             f"Stufe (Tier):   {tier.upper()}\n"
             f"Dauer:          {args.duration} Sekunden\n"
             f"Ref-Video:      {args.ref_video or 'Keines'}\n"
-            f"Geschätzte Kosten: ~{cost_info['estimated_cost_usd']} USD\n"
+            f"{smart_note}"
+            f"Unverbindlicher Richtwert (nicht live geprüft): {cost_info['estimated_cost_usd']} USD\n"
             f"\n"
             f"[DATENSCHUTZ-HINWEIS]\n"
             f"Wan 3.0 und MiniMax H3 laufen über Server außerhalb der EU (China).\n"
             f"Ausschließlich für freigegebene Marketing- und Fiktionsinhalte nutzen; keine Mandantendaten.\n"
             f"\n"
-            f"HINWEIS: Um diesen Bezahlauftrag verbindlich auszuführen, hänge '--confirm' an den Befehl an.\n"
+            f"HINWEIS: Um diesen Bezahlauftrag verbindlich auszuführen, prüfe den Anbieterpreis und setze '--confirm --max-credits <Limit>'.\n"
             f"===================================\n"
         )
         if args.json:
@@ -477,13 +552,23 @@ def main() -> int:
         else:
             active_result = args.output
 
+        # Optional Cloud ByteDance Upscaling
+        if args.upscale_bytedance:
+            bd_output = str(Path(args.output).with_suffix("")) + "_bytedance.mp4"
+            print(f"[Cloud Step] Sende an ByteDance Video Upscale (Kosten abhängig vom Anbieter)...", file=sys.stderr)
+            bd_rc = _run_bytedance_upscale(active_result, bd_output, confirm=args.confirm, max_credits=args.max_credits, allow_upload=args.allow_upload)
+            if bd_rc != 0:
+                return bd_rc
+            active_result = bd_output
+
         # Optional Cloud Topaz Neural Sharpening
         if args.upscale_topaz:
             topaz_output = str(Path(args.output).with_suffix("")) + "_topaz.mp4"
             print(f"[Cloud Step] Sende an Topaz Hyperion 2.5...", file=sys.stderr)
-            topaz_rc = _run_topaz_upscale(active_result, topaz_output, confirm=args.confirm)
-            if topaz_rc == 0:
-                active_result = topaz_output
+            topaz_rc = _run_topaz_upscale(active_result, topaz_output, confirm=args.confirm, max_credits=args.max_credits, allow_upload=args.allow_upload)
+            if topaz_rc != 0:
+                return topaz_rc
+            active_result = topaz_output
 
         # Print Gate Verdict & Guidance for Hannibal
         print(
@@ -498,8 +583,8 @@ def main() -> int:
             f"  ➔ JA: FERTIG! Keine weiteren Schritte oder Kosten nötig.\n"
             f"  ➔ NEIN (mehr Dynamik/Physik nötig): Re-Render via Cloud:\n"
             f"     uv run tools/video_generate.py --provider direct --model wan3_0 --ref-video {active_result} --confirm\n"
-            f"     oder via Higgsfield:\n"
-            f"     uv run tools/video_generate.py --provider higgsfield --model minimax_h3 --ref-video {active_result} --confirm\n"
+            f"     Higgsfield Smart-Upscale ist bis zur Gesamtpreisprüfung gesperrt:\n"
+            f"     uv run tools/video_generate.py --provider higgsfield --model seedance_2_5 --smart-upscale --confirm\n"
             f"----------------------------------------------------------\n"
             f"M4-PRO-24-GB-PROFIL:\n"
             f"• Distilled Q8 + Low-RAM, 768×448 und kurze 49-Frame-Shots.\n"
@@ -511,8 +596,13 @@ def main() -> int:
         return 0
 
     elif tier == "upscale":
-        target_input = args.ref_video or args.image or args.output
-        return _run_topaz_upscale(target_input, args.output, confirm=args.confirm)
+        target_input = args.ref_video or args.image
+        if not target_input:
+            print("Für Upscaling ist --ref-video oder --image erforderlich.", file=sys.stderr)
+            return 1
+        if model == "bytedance_video_upscale":
+            return _run_bytedance_upscale(target_input, args.output, resolution=args.resolution or "1080p", confirm=args.confirm, max_credits=args.max_credits, allow_upload=args.allow_upload)
+        return _run_topaz_upscale(target_input, args.output, confirm=args.confirm, max_credits=args.max_credits, allow_upload=args.allow_upload)
     else:
         return _run_cloud_generation(
             model=model,
@@ -524,7 +614,10 @@ def main() -> int:
             duration=args.duration,
             resolution=args.resolution,
             aspect_ratio=args.aspect_ratio,
+            smart_upscale=args.smart_upscale,
             confirm=args.confirm,
+            max_credits=args.max_credits,
+            allow_upload=args.allow_upload,
         )
 
 

@@ -26,6 +26,7 @@ Usage:
 
 import argparse
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -79,15 +80,73 @@ def get_balance() -> dict:
 
 
 def estimate_cost(
-    model: str, prompt: str, image: str | None = None, extra_params: dict | None = None,
+    model: str, prompt: str | None = None, image: str | None = None, video: str | None = None, extra_params: dict | None = None,
 ) -> dict:
     hf_bin = _get_higgsfield_bin()
-    cmd = [hf_bin, "generate", "cost", model, "--prompt", prompt, "--json"]
+    cmd = [hf_bin, "generate", "cost", model, "--json"]
+    if prompt:
+        cmd += ["--prompt", prompt]
     if image:
         cmd += ["--image", image]
+    if video:
+        cmd += ["--video", video]
     for k, v in (extra_params or {}).items():
         cmd += [f"--{k}", str(v)]
     return _run_json(cmd)
+
+
+def upscale_video(
+    video_path: str,
+    output_path: str,
+    resolution: str = "1080p",
+    preset: str = "aigc",
+    wait_timeout: str = "20m",
+) -> dict:
+    """Upscale video using ByteDance Video Upscale on Higgsfield."""
+    hf_bin = _get_higgsfield_bin()
+    cmd = [
+        hf_bin, "generate", "create", "bytedance_video_upscale",
+        "--video", video_path,
+        "--resolution", resolution,
+        "--preset", preset,
+        "--wait", "--wait-timeout", wait_timeout,
+        "--json",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        return {"success": False, "error": (proc.stderr or proc.stdout).strip()}
+
+    try:
+        jobs = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {
+            "success": False,
+            "error": f"Could not parse higgsfield output: {proc.stdout[:500]}",
+        }
+
+    job = jobs[0] if isinstance(jobs, list) else jobs
+    result_url = job.get("result_url") or job.get("min_result_url")
+
+    if job.get("status") != "completed" or not result_url:
+        return {
+            "success": False,
+            "error": f"Upscale job did not complete: {json.dumps(job)[:1000]}",
+            "job": job,
+        }
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    ok = download_from_url(result_url, str(output_path), verbose=True)
+    if not ok:
+        return {"success": False, "error": f"Download failed: {result_url}", "job": job}
+
+    return {
+        "success": True,
+        "output": str(output_path),
+        "job_id": job.get("id"),
+        "model": "bytedance_video_upscale",
+        "result_url": result_url,
+    }
 
 
 def create_video(
@@ -149,15 +208,20 @@ def create_video(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AI video generation via Higgsfield CLI (cloud, paid, cost-gated)",
+        description="AI video generation & smart upscaling via Higgsfield CLI (cloud, paid, cost-gated)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python tools/higgsfield_video.py --prompt "cinematic product shot" --output clip.mp4
-  python tools/higgsfield_video.py --prompt "..." --output clip.mp4 --confirm
-  python tools/higgsfield_video.py --prompt "camera pans right" --image photo.jpg \\
-      --output clip.mp4 --confirm
-  python tools/higgsfield_video.py --list-models
+  # Cost estimate with Smart Upscale trick (480p + ByteDance Upscale)
+  python tools/higgsfield_video.py --model seedance_2_5 --prompt "cinematic shot" --output clip.mp4 --smart-upscale
+
+  # Smart Upscale is blocked until its complete cost can be verified.
+
+  # Standalone ByteDance Upscaling of any video (local or cloud)
+  python tools/higgsfield_video.py --model bytedance_video_upscale --video draft.mp4 --output crisp.mp4 --allow-upload --confirm --max-credits 10
+
+  # Standard single-pass generation
+  python tools/higgsfield_video.py --prompt "..." --output clip.mp4 --confirm --max-credits 10
         """,
     )
     parser.add_argument("--prompt", "-p", type=str, help="Text prompt")
@@ -170,10 +234,22 @@ Examples:
         "--image", type=str,
         help="Reference image for image-to-video (local path or upload id)",
     )
+    parser.add_argument(
+        "--video", "-v", type=str,
+        help="Input video file path (for bytedance_video_upscale or video-to-video)",
+    )
     parser.add_argument("--duration", type=int, help="Clip duration in seconds (model-dependent)")
-    parser.add_argument("--resolution", type=str, help="Resolution, e.g. 720p (model-dependent)")
+    parser.add_argument("--resolution", type=str, help="Target resolution, e.g. 1080p, 480p (model-dependent)")
     parser.add_argument(
         "--aspect-ratio", type=str, help="Aspect ratio, e.g. 16:9 (model-dependent)",
+    )
+    parser.add_argument(
+        "--preset", type=str, default="aigc",
+        help="Upscale preset (common, aigc, short_series, ugc, old_film). Default: aigc",
+    )
+    parser.add_argument(
+        "--smart-upscale", action="store_true",
+        help="Calvin Hollywood Trick: Render base at 480p, then upscale with ByteDance to 1080p (cost depends on provider pricing)",
     )
     parser.add_argument(
         "--confirm", action="store_true",
@@ -184,6 +260,8 @@ Examples:
     )
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
 
+    parser.add_argument("--allow-upload", action="store_true", help="Explicitly allow media upload to Higgsfield, including during cost estimation")
+    parser.add_argument("--max-credits", type=float, help="Maximum authorized credit cost for this job")
     args = parser.parse_args()
 
     if args.list_models:
@@ -197,61 +275,122 @@ Examples:
             print()
         return
 
-    if not args.prompt:
-        print("Error: --prompt required", file=sys.stderr)
+    is_upscale_only = (args.model == "bytedance_video_upscale")
+
+    if not is_upscale_only and not args.prompt:
+        print("Error: --prompt required for generative models", file=sys.stderr)
+        sys.exit(1)
+    if is_upscale_only and not args.video:
+        print("Error: --video required for bytedance_video_upscale", file=sys.stderr)
         sys.exit(1)
     if not args.output:
         print("Error: --output required", file=sys.stderr)
         sys.exit(1)
 
+    if (args.image or args.video) and not args.allow_upload:
+        print("Medienübertragung auch bei Preisabfrage möglich; --allow-upload ist erforderlich.", file=sys.stderr)
+        sys.exit(1)
+    if any(media and Path(media).resolve() == Path(args.output).resolve() for media in (args.video, args.image)):
+        print("Eingabe und Ausgabe müssen verschiedene Dateien sein.", file=sys.stderr)
+        sys.exit(1)
+    if args.confirm and args.smart_upscale:
+        print("Kosten des Upscalings vor Generierung unbekannt; automatische Kette gesperrt.", file=sys.stderr)
+        sys.exit(1)
     extra_params = {}
     if args.duration is not None:
         extra_params["duration"] = args.duration
-    if args.resolution:
-        extra_params["resolution"] = args.resolution
     if args.aspect_ratio:
         extra_params["aspect-ratio"] = args.aspect_ratio
 
-    try:
-        cost = estimate_cost(args.model, args.prompt, image=args.image, extra_params=extra_params)
-        balance = get_balance()
-    except RuntimeError as e:
-        print(f"Error estimating cost: {e}", file=sys.stderr)
+    # Handle resolution for smart-upscale vs standard
+    target_upscale_res = args.resolution or "1080p"
+    if args.smart_upscale:
+        base_res = "480p"
+        extra_params["resolution"] = base_res
+    elif args.resolution:
+        extra_params["resolution"] = args.resolution
+
+    balance = get_balance()
+
+    if is_upscale_only:
+        print("Hinweis: Die Preisabfrage kann das Video zu Higgsfield hochladen.", file=sys.stderr)
+        cost = estimate_cost("bytedance_video_upscale", video=args.video, extra_params={"resolution": target_upscale_res, "preset": args.preset})
+        credits = cost.get("credits")
+    elif args.smart_upscale:
+        base_cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
+        base_cr = base_cost.get("credits")
+        # The provider needs the generated video to quote the second step.
+        credits = None
+    else:
+        cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
+        credits = cost.get("credits")
+    native_comparison = None
+
+    def valid_number(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+    if args.confirm and (not valid_number(credits) or not valid_number(balance.get("credits")) or not valid_number(args.max_credits) or credits > args.max_credits or balance["credits"] < credits):
+        print("Kosten, Guthaben oder --max-credits unbekannt oder unzureichend; kein Auftrag erstellt.", file=sys.stderr)
         sys.exit(1)
 
-    credits = cost.get("credits")
-
     if not args.confirm:
+        savings_pct = round((1 - credits / native_comparison) * 100) if (native_comparison and credits) else None
         result = {
             "confirmed": False,
             "model": args.model,
+            "smart_upscale": args.smart_upscale,
+            "target_resolution": target_upscale_res if args.smart_upscale else args.resolution,
             "estimated_credits": credits,
+            "base_credits": base_cr if args.smart_upscale else None,
+            "native_1080p_credits": native_comparison,
+            "savings_percent": f"{savings_pct}%" if savings_pct else None,
             "account_balance": balance,
-            "note": "No job created. Re-run with --confirm to spend credits and generate.",
+            "note": "No job created. Individual jobs require --confirm and --max-credits; smart upscale remains blocked.",
         }
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print(f"Higgsfield cost estimate — model: {args.model}")
-            print(f"  Estimated cost: {credits} credits")
-            print(f"  Account balance: {balance['raw']}")
+            print(f"=== HIGGSFIELD KOSTENSCHÄTZUNG ===")
+            print(f"  Modell:             {args.model}")
+            if args.smart_upscale:
+                print(f"  Modus:              Smart Upscale Trick (480p Basis + ByteDance Upscale auf {target_upscale_res})")
+                print(f"  Gesamtkosten: {credits if credits is not None else 'unbekannt'} Credits")
+                if native_comparison:
+                    print(f"  Vergleich Nativ:    ~{native_comparison} Credits")
+                    print(f"  Deine Ersparnis:    ~{savings_pct}% Rabatt!")
+            else:
+                print(f"  Gesamtkosten: {credits if credits is not None else 'unbekannt'} Credits")
+            print(f"  Account-Guthaben:   {balance['raw']}")
             insufficient = (
                 balance.get("credits") is not None
                 and credits is not None
                 and balance["credits"] < credits
             )
             if insufficient:
-                print("  WARNING: balance may be insufficient for this generation.")
-            print("\nNo job created (no charge). Re-run with --confirm to generate.")
+                print("  WARNUNG: Guthaben reicht möglicherweise nicht aus.")
+            print("\nKein Job ausgeführt (0 Credits verbraucht). Für einen Einzelauftrag sind --confirm und --max-credits erforderlich.")
+            print("==================================")
         return
 
-    if not args.json:
-        print(
-            f"Confirmed — spending ~{credits} credits on {args.model}. "
-            "Generating (this can take a few minutes)...",
-            file=sys.stderr,
-        )
+    # Execute workflow
+    if is_upscale_only:
+        print(f"Confirmed — upscale video mit ByteDance ({target_upscale_res})...", file=sys.stderr)
+        res = upscale_video(args.video, args.output, resolution=target_upscale_res, preset=args.preset)
+        if not res.get("success"):
+            print(f"Error: {res.get('error')}", file=sys.stderr)
+            sys.exit(1)
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            print(f"Saved: {res['output']}", file=sys.stderr)
+        return
 
+    # Standard direct generation
+    print(
+        f"Confirmed — spending ~{credits} credits on {args.model}. "
+        "Generating (this can take a few minutes)...",
+        file=sys.stderr,
+    )
     result = create_video(
         model=args.model,
         prompt=args.prompt,
@@ -263,6 +402,8 @@ Examples:
 
     if args.json:
         print(json.dumps(result, indent=2))
+        if not result.get("success"):
+            sys.exit(1)
     else:
         if result.get("success"):
             print(f"Saved: {result['output']}", file=sys.stderr)

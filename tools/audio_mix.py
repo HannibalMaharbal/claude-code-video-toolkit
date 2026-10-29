@@ -27,7 +27,7 @@ def mix(
     *,
     music: Path | None = None,
     sfx: Path | None = None,
-    target_lufs: float = -16.0,
+    target_lufs: float = -14.0,
 ) -> dict[str, Any]:
     """Create a conservative, speech-prioritized master without external services."""
     for path in (video, voiceover, music, sfx):
