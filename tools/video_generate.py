@@ -262,6 +262,8 @@ def _run_cloud_generation(
     resolution: str | None = None,
     aspect_ratio: str | None = None,
     smart_upscale: bool = False,
+    smart_base_only: bool = False,
+    json_output: bool = False,
     confirm: bool = False,
     max_credits: float | None = None,
     allow_upload: bool = False,
@@ -295,6 +297,10 @@ def _run_cloud_generation(
         cmd += ["--aspect-ratio", aspect_ratio]
     if smart_upscale and provider == "higgsfield":
         cmd.append("--smart-upscale")
+    if smart_base_only and provider == "higgsfield":
+        cmd.append("--smart-base-only")
+    if json_output and provider == "higgsfield":
+        cmd.append("--json")
     if confirm:
         cmd.append("--confirm")
 
@@ -464,9 +470,14 @@ def main() -> int:
     )
     parser.add_argument("--json", action="store_true", help="Output execution metadata as JSON")
 
+    parser.add_argument("--smart-base-only", action="store_true", help="Generate only the separately priced 480p base clip")
     parser.add_argument("--allow-upload", action="store_true", help="Allow Higgsfield media upload")
     parser.add_argument("--max-credits", type=float, help="Maximum authorized credits")
     args = parser.parse_args()
+
+    if args.upscale_bytedance and args.upscale_topaz:
+        print("Bitte nur einen Cloud-Upscaler pro Auftrag wählen; jedes Credit-Limit gilt für einen Auftrag.", file=sys.stderr)
+        return 1
 
     # Determine model and tier
     if args.model:
@@ -481,6 +492,12 @@ def main() -> int:
 
     args.duration = _resolve_duration(tier, args.duration)
     cost_info = _estimate_cost(model, args.duration, bool(args.ref_video))
+    if args.ref_video and tier in ("cloud", "premium"):
+        print("--ref-video wird vom Cloud-Pfad nicht unterstützt; kein Auftrag erstellt.", file=sys.stderr)
+        return 1
+    if args.smart_base_only and not args.smart_upscale:
+        print("--smart-base-only benötigt --smart-upscale.", file=sys.stderr)
+        return 1
     if model == "bytedance_video_upscale":
         cost_info["estimated_cost_usd"] = None
     if args.smart_upscale:
@@ -492,6 +509,15 @@ def main() -> int:
     if tier == "draft" and (args.upscale_bytedance or args.upscale_topaz) and not args.confirm:
         print("Cloud-Upscaling benötigt eine ausdrückliche Freigabe und vorherige Kostenprüfung.", file=sys.stderr)
         return 1
+
+    if args.smart_base_only and not args.confirm:
+        return _run_cloud_generation(
+            model=model, prompt=args.prompt, output_path=args.output,
+            image=args.image, provider=args.provider, duration=args.duration,
+            resolution=args.resolution, aspect_ratio=args.aspect_ratio,
+            smart_upscale=True, smart_base_only=True, json_output=args.json,
+            allow_upload=args.allow_upload,
+        )
 
     # Safety Gate: Paid generation requires explicit confirmation
     if tier != "draft" and not args.confirm:
@@ -615,6 +641,8 @@ def main() -> int:
             resolution=args.resolution,
             aspect_ratio=args.aspect_ratio,
             smart_upscale=args.smart_upscale,
+            smart_base_only=args.smart_base_only,
+            json_output=args.json,
             confirm=args.confirm,
             max_credits=args.max_credits,
             allow_upload=args.allow_upload,

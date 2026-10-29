@@ -1,3 +1,37 @@
+## VTK-SMART-UPSCALE-LIVE — Übergabe an Claude, 2026-10-29
+
+- Fortsetzung und Freigabegrenzen: `docs/smart-upscale-review/CLAUDE_HANDOFF.md`; Review-Auftrag: `docs/smart-upscale-review/REVIEW.md`. Ein lokaler Diff-Snapshot liegt unter `scratch/smart-upscale-review/changes.diff`.
+- Basispreis 30 Credits zuletzt abgefragt; Hannibals ausdrückliche Freigabe des Basisauftrags steht aus. Keine bezahlte Generierung und kein Upload; die Nutzerfreigabe für diesen Commit und Push liegt vor. Testsuite mit Projekt-venv und erforderlichem lokalen Zugriff: 524 bestanden.
+
+## VTK-SMART-UPSCALE-LIVE — Vorbereitung, 2026-10-29
+
+- Auftrag: kontrollierter Live-Test, vor jedem Bezahlauftrag explizite Freigabe nach Preisabfrage; höchstens 30 Credits für den Basisclip. Upload ausschließlich nach separater ausdrücklicher Freigabe für den einen Testclip. Kein automatischer Neuauftrag, Commit oder Push.
+- Read-only Preisabfrage: `seedance_2_5`, 480p, 10 s, Prompt `A slow camera movement` = 30 Credits. Keine Generierung beauftragt, keine Medien hochgeladen. Basisclip wartet auf Hannibals ausdrückliche Preisfreigabe.
+- Upscale-Preis, tatsächlich abgebuchte Kosten, Qualitätsvergleich und Freischaltung der Gesamtkette bleiben unbestätigt. Ein Einzelpreis darf nicht als dauerhaft gültiger Gesamtpreis in die Vorschau festgeschrieben werden, solange sich Tarif, Parameter oder Anbieterpreis ändern können.
+- Vorbereitung für modellfremdes Review in `scratch/smart-upscale-review/`: Zusammenfassung und Git-Diff; bei weiteren Änderungen erneut erzeugen. Vollständige Testsuite in der vorhandenen Projekt-venv mit erforderlichem lokalem Browser-/Ollama-Zugriff: 524 bestanden (`.venv/bin/python -m pytest -q`).
+
+## VTK-SMART-UPSCALE-05 — Review-Fixes, 2026-10-29
+
+- Codex: Ergebnisse werden zunächst temporär geladen und ohne Überschreiben atomar bereitgestellt; bei Downloadfehler wird die Job-ID für die Wiederaufnahme genannt. Kombinierte ByteDance-/Topaz-Aufträge werden vor dem Render abgelehnt, damit ein Einzellimit nicht doppelt verbraucht wird. CLI-Fehler und Timeouts weisen auf möglicherweise bereits erfolgte Abbuchung hin und starten keinen neuen Job.
+- Separater Codex-Review hat die Befunde geliefert; modellfremde Prüfung und bezahlter Live-Test bleiben offen. Betroffene lokale Videosuite nach den Änderungen: 64 Tests bestanden. Keine Medien übertragen, keine bezahlten Jobs ausgelöst.
+
+## VTK-SMART-UPSCALE-04 — Zeitlimits und Preisprobe, 2026-10-29
+
+- Codex: Zeitlimits für Konto-/Kostenabfrage (120 s) und Jobaufruf (1500 s) ergänzt. Ein Job-Timeout meldet unklaren Anbieterstatus und mögliche Abbuchung; keine automatische Wiederholung. Neue Timeout-Tests und betroffene Videosuite: 61 bestanden.
+- Read-only Higgsfield-CLI-Modellbeschreibung bestätigt `seedance_2_5` mit `resolution` 480p/720p/1080p und Dauerparameter. Kostenabfrage ohne Job oder Upload: Beispieltext, 10 s, 480p = 30 Credits zum Abfragezeitpunkt. ByteDance-Preisabfrage ohne Video abgewiesen (video_references erforderlich). Kein Medienupload, kein bezahlter Job. Gesamtpreis und Live-Qualität weiterhin unbekannt.
+- Modellfremde unabhängige Prüfung und tatsächlicher End-to-End-Test bleiben offen. `VTK-SMART-UPSCALE-03`-Hinweis auf fehlendes Subprozess-Timeout ist durch diesen Nachtrag überholt.
+
+## VTK-SMART-UPSCALE-03 — Nachprüfung, 2026-10-29
+
+- Codex: Ausgabedateien vor Überschreiben geschützt; Anbieter-/Preisfehler verständlich und ohne automatischen Neuauftrag gemeldet; leere bzw. ungültige Jobantwort abgefangen; JSON-Option im Dispatcher weitergereicht. Nicht unterstützte Cloud-Referenzvideos werden abgewiesen statt als verwendet bezeichnet.
+- Separater Codex-Reviewer prüfte read-only; modellfremdes Review steht für kosten- und datenrelevante Änderungen weiterhin aus. 59 lokale Tests bestanden; simulierte Anbieterantworten, kein Upload oder bezahlter End-to-End-Lauf. CLI-Wartezeit begrenzt den Job, ein unabhängiges Subprozess-Timeout ist noch nicht implementiert; bei Hänger Anbieterstatus vor erneutem Auftrag prüfen.
+- Kette weiterhin zweistufig: Basisclip separat mit Preislimit; Upscaling separat nach Preisprüfung und Freigabe. Automatisches Gesamtchaining bei unbekanntem Gesamtpreis bleibt gesperrt.
+
+## VTK-SMART-UPSCALE-02 — Separater Basisclip, 2026-10-29
+
+- Owner/Schreiber: Codex. `--smart-upscale --smart-base-only` erstellt nach separater Kostenprüfung und ausdrücklicher Freigabe ausschließlich den 480p-Basisclip. Der bestehende Clip wird nicht überschrieben; das Upscaling ist ein separat zu prüfender und freizugebender Auftrag. Beide Einstiege leiten die Option weiter.
+- Die automatische Gesamtkette bleibt gesperrt: Der Preis für Schritt 2 ist vor Erstellung des Clips nicht verifiziert. Keine Medien übertragen und keine kostenpflichtigen Jobs ausgelöst. Für tatsächliche Nutzung bleiben Anbieterpreise, Modellparameter, End-to-End-Qualität und unabhängige modellfremde Prüfung offen.
+
 ## VTK-SMART-UPSCALE-01 — Fortsetzung und Review, 2026-10-29
 
 - Owner/Schreiber: Codex. Ein separater Codex-Review-Agent prüfte die Änderungen unabhängig und meldete Upload-, Kostenlimit-, Überschreibungs- und Fehlerbehandlungsrisiken; diese wurden behoben. Modellfremde unabhängige Prüfung für diese kosten-/datenrelevante Änderung steht noch aus.

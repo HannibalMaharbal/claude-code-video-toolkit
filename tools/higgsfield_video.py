@@ -27,6 +27,8 @@ Usage:
 import argparse
 import json
 import math
+import os
+import tempfile
 import shutil
 import subprocess
 import sys
@@ -36,6 +38,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from file_transfer import download_from_url
 
 DEFAULT_MODEL = "seedance_2_0_mini"
+QUOTE_TIMEOUT_SECONDS = 120
+JOB_TIMEOUT_SECONDS = 1500
 
 
 def _get_higgsfield_bin() -> str:
@@ -54,7 +58,7 @@ def _get_higgsfield_bin() -> str:
 
 
 def _run_json(cmd: list[str]) -> dict | list:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=QUOTE_TIMEOUT_SECONDS)
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout).strip())
     return json.loads(proc.stdout)
@@ -68,7 +72,9 @@ def list_models() -> list[dict]:
 def get_balance() -> dict:
     """Parse `higgsfield account status` (plain text: 'email — plan, N credits')."""
     hf_bin = _get_higgsfield_bin()
-    proc = subprocess.run([hf_bin, "account", "status"], capture_output=True, text=True)
+    proc = subprocess.run([hf_bin, "account", "status"], capture_output=True, text=True, timeout=QUOTE_TIMEOUT_SECONDS)
+    if proc.returncode != 0:
+        raise RuntimeError("Higgsfield-Kontostatus nicht verfügbar")
     text = (proc.stdout or "").strip()
     credits = None
     if "credits" in text:
@@ -95,6 +101,27 @@ def estimate_cost(
     return _run_json(cmd)
 
 
+def _download_job_result(result_url: str, output_path: str, job: dict) -> dict | None:
+    target = Path(output_path)
+    temp_path = None
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".higgsfield-", suffix=".part", delete=False) as temp:
+            temp_path = Path(temp.name)
+        if not download_from_url(result_url, str(temp_path), verbose=True):
+            raise OSError("Download fehlgeschlagen")
+        os.link(temp_path, target)
+        return None
+    except OSError as exc:
+        return {"success": False, "error": f"Download fehlgeschlagen ({exc}); Job-ID {job.get('id', 'unbekannt')}. Anbieterstatus und Download prüfen, nicht neu generieren.", "job": job}
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                print(f"Temporäre Datei konnte nicht entfernt werden: {temp_path}", file=sys.stderr)
+
+
 def upscale_video(
     video_path: str,
     output_path: str,
@@ -112,19 +139,26 @@ def upscale_video(
         "--wait", "--wait-timeout", wait_timeout,
         "--json",
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=JOB_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Zeitüberschreitung: Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen."}
     if proc.returncode != 0:
-        return {"success": False, "error": (proc.stderr or proc.stdout).strip()}
+        return {"success": False, "error": (proc.stderr or proc.stdout).strip() + " Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen."}
 
     try:
         jobs = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return {
             "success": False,
-            "error": f"Could not parse higgsfield output: {proc.stdout[:500]}",
+            "error": f"Could not parse higgsfield output: {proc.stdout[:500]}. Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen.",
         }
 
-    job = jobs[0] if isinstance(jobs, list) else jobs
+    if isinstance(jobs, list):
+        jobs = jobs[0] if jobs else None
+    if not isinstance(jobs, dict):
+        return {"success": False, "error": "Ungültige Job-Antwort; Anbieterstatus vor einem erneuten Auftrag prüfen."}
+    job = jobs
     result_url = job.get("result_url") or job.get("min_result_url")
 
     if job.get("status") != "completed" or not result_url:
@@ -134,11 +168,9 @@ def upscale_video(
             "job": job,
         }
 
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    ok = download_from_url(result_url, str(output_path), verbose=True)
-    if not ok:
-        return {"success": False, "error": f"Download failed: {result_url}", "job": job}
+    error = _download_job_result(result_url, output_path, job)
+    if error:
+        return error
 
     return {
         "success": True,
@@ -169,19 +201,26 @@ def create_video(
     for k, v in (extra_params or {}).items():
         cmd += [f"--{k}", str(v)]
 
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=JOB_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return {"success": False, "error": "Zeitüberschreitung: Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen."}
     if proc.returncode != 0:
-        return {"success": False, "error": (proc.stderr or proc.stdout).strip()}
+        return {"success": False, "error": (proc.stderr or proc.stdout).strip() + " Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen."}
 
     try:
         jobs = json.loads(proc.stdout)
     except json.JSONDecodeError:
         return {
             "success": False,
-            "error": f"Could not parse higgsfield output: {proc.stdout[:500]}",
+            "error": f"Could not parse higgsfield output: {proc.stdout[:500]}. Anbieterstatus und mögliche Abbuchung vor erneutem Auftrag prüfen.",
         }
 
-    job = jobs[0] if isinstance(jobs, list) else jobs
+    if isinstance(jobs, list):
+        jobs = jobs[0] if jobs else None
+    if not isinstance(jobs, dict):
+        return {"success": False, "error": "Ungültige Job-Antwort; Anbieterstatus vor einem erneuten Auftrag prüfen."}
+    job = jobs
     result_url = job.get("result_url") or job.get("min_result_url")
 
     if job.get("status") != "completed" or not result_url:
@@ -191,11 +230,9 @@ def create_video(
             "job": job,
         }
 
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    ok = download_from_url(result_url, str(output_path), verbose=True)
-    if not ok:
-        return {"success": False, "error": f"Download failed: {result_url}", "job": job}
+    error = _download_job_result(result_url, output_path, job)
+    if error:
+        return error
 
     return {
         "success": True,
@@ -260,6 +297,7 @@ Examples:
     )
     parser.add_argument("--json", action="store_true", help="Output result as JSON")
 
+    parser.add_argument("--smart-base-only", action="store_true", help="Create only the 480p base clip; the upscale remains a separately priced job")
     parser.add_argument("--allow-upload", action="store_true", help="Explicitly allow media upload to Higgsfield, including during cost estimation")
     parser.add_argument("--max-credits", type=float, help="Maximum authorized credit cost for this job")
     args = parser.parse_args()
@@ -287,13 +325,19 @@ Examples:
         print("Error: --output required", file=sys.stderr)
         sys.exit(1)
 
+    if args.smart_base_only and (not args.smart_upscale or is_upscale_only):
+        print("--smart-base-only benötigt --smart-upscale und ein Generierungsmodell.", file=sys.stderr)
+        sys.exit(1)
+    if args.confirm and Path(args.output).exists():
+        print("Ausgabedatei existiert bereits; eine neue Ausgabedatei wählen.", file=sys.stderr)
+        sys.exit(1)
     if (args.image or args.video) and not args.allow_upload:
         print("Medienübertragung auch bei Preisabfrage möglich; --allow-upload ist erforderlich.", file=sys.stderr)
         sys.exit(1)
     if any(media and Path(media).resolve() == Path(args.output).resolve() for media in (args.video, args.image)):
         print("Eingabe und Ausgabe müssen verschiedene Dateien sein.", file=sys.stderr)
         sys.exit(1)
-    if args.confirm and args.smart_upscale:
+    if args.confirm and args.smart_upscale and not args.smart_base_only:
         print("Kosten des Upscalings vor Generierung unbekannt; automatische Kette gesperrt.", file=sys.stderr)
         sys.exit(1)
     extra_params = {}
@@ -310,20 +354,27 @@ Examples:
     elif args.resolution:
         extra_params["resolution"] = args.resolution
 
-    balance = get_balance()
+    try:
+        balance = get_balance()
 
-    if is_upscale_only:
-        print("Hinweis: Die Preisabfrage kann das Video zu Higgsfield hochladen.", file=sys.stderr)
-        cost = estimate_cost("bytedance_video_upscale", video=args.video, extra_params={"resolution": target_upscale_res, "preset": args.preset})
-        credits = cost.get("credits")
-    elif args.smart_upscale:
-        base_cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
-        base_cr = base_cost.get("credits")
-        # The provider needs the generated video to quote the second step.
-        credits = None
-    else:
-        cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
-        credits = cost.get("credits")
+        if is_upscale_only:
+            print("Hinweis: Die Preisabfrage kann das Video zu Higgsfield hochladen.", file=sys.stderr)
+            cost = estimate_cost("bytedance_video_upscale", video=args.video, extra_params={"resolution": target_upscale_res, "preset": args.preset})
+            credits = cost.get("credits")
+        elif args.smart_upscale:
+            base_cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
+            base_cr = base_cost.get("credits")
+            # The provider needs the generated video to quote the second step.
+            credits = base_cr if args.smart_base_only else None
+        else:
+            cost = estimate_cost(args.model, prompt=args.prompt, image=args.image, extra_params=extra_params)
+            credits = cost.get("credits")
+    except subprocess.TimeoutExpired:
+        print("Kostenprüfung Zeitüberschreitung; kein Auftrag erstellt.", file=sys.stderr)
+        sys.exit(1)
+    except (RuntimeError, ValueError, OSError, AttributeError) as exc:
+        print(f"Kostenprüfung fehlgeschlagen: {exc}; kein Auftrag erstellt.", file=sys.stderr)
+        sys.exit(1)
     native_comparison = None
 
     def valid_number(value):
@@ -339,8 +390,9 @@ Examples:
             "confirmed": False,
             "model": args.model,
             "smart_upscale": args.smart_upscale,
+            "smart_base_only": args.smart_base_only,
             "target_resolution": target_upscale_res if args.smart_upscale else args.resolution,
-            "estimated_credits": credits,
+            "estimated_credits": None if args.smart_base_only else credits,
             "base_credits": base_cr if args.smart_upscale else None,
             "native_1080p_credits": native_comparison,
             "savings_percent": f"{savings_pct}%" if savings_pct else None,
@@ -354,7 +406,8 @@ Examples:
             print(f"  Modell:             {args.model}")
             if args.smart_upscale:
                 print(f"  Modus:              Smart Upscale Trick (480p Basis + ByteDance Upscale auf {target_upscale_res})")
-                print(f"  Gesamtkosten: {credits if credits is not None else 'unbekannt'} Credits")
+                print(f"  Basispreis: {base_cr if base_cr is not None else 'unbekannt'} Credits")
+                print("  Upscale-Preis und Gesamtkosten: unbekannt")
                 if native_comparison:
                     print(f"  Vergleich Nativ:    ~{native_comparison} Credits")
                     print(f"  Deine Ersparnis:    ~{savings_pct}% Rabatt!")
@@ -407,6 +460,8 @@ Examples:
     else:
         if result.get("success"):
             print(f"Saved: {result['output']}", file=sys.stderr)
+            if args.smart_base_only:
+                print("Basisclip erhalten. Upscaling separat mit --model bytedance_video_upscale --video <Basisclip> --output <Ziel> --allow-upload vorab prüfen; danach Preislimit und Freigabe setzen.", file=sys.stderr)
         else:
             print(f"Error: {result.get('error')}", file=sys.stderr)
             sys.exit(1)
