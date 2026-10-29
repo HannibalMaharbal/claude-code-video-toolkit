@@ -351,7 +351,7 @@ def generate_video(
     if not MODEL_PATH.is_dir():
         return {"success": False, "error": f"LTX-2.5-Modell fehlt unter {MODEL_PATH}."}
 
-    output_path = Path(output_path)
+    output_path = Path(output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     continuation_source = str(Path(continue_from)) if continue_from else None
     is_mocked = hasattr(subprocess.run, "assert_called") or "mock" in type(subprocess.run).__module__
