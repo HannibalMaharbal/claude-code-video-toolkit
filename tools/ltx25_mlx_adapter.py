@@ -230,12 +230,13 @@ def _extract_last_frame(video_path: Path, output_path: Path) -> str | None:
 def sharpen_video(
     input_path: Path | str,
     output_path: Path | str | None = None,
-    cas: float = 0.6,
+    cas: float | None = 0.6,
 ) -> bool:
     """Run Apple Silicon VideoToolbox Lanczos 1080p scaling + Contrast Adaptive Sharpening (CAS).
 
     Hardware-accelerated via h264_videotoolbox (0 € Grenzkosten, ~0.3s on Apple Silicon).
     """
+    cas_val = cas if cas is not None else 0.6
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return False
@@ -249,7 +250,7 @@ def sharpen_video(
 
     vf_filter = (
         "scale='if(gt(iw,ih),1920,-2)':'if(gt(iw,ih),-2,1920)':flags=lanczos+accurate_rnd+full_chroma_int,"
-        f"cas={cas},"
+        f"cas={cas_val},"
         "unsharp=3:3:0.30:3:3:0.0"
     )
 
