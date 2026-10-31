@@ -628,7 +628,7 @@
       "usage": "python tools/ltx25_mlx_adapter.py --prompt \"A sunset over the ocean\" --output sunset.mp4",
       "status": "active",
       "category": "video-generation",
-      "backend": "ltx-2-mlx runtime (github.com/MrMoferFRAN/ltx-2-mlx, branch ltx25, pinned commit 57952288) + MrMofer/ltx-2.5-mlx-q8 weights, cached locally in ~/AI-Modelle/ltx-2-mlx and ~/.cache/huggingface/hub",
+      "backend": "ltx-2-mlx runtime (github.com/MrMoferFRAN/ltx-2-mlx, branch ltx25, pinned commit 57952288) + MrMofer/ltx-2.5-mlx-q8 weights, cached locally in ~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/ltx-2-mlx and ~/.cache/huggingface/hub",
       "env_vars": [],
       "options": {
         "--mode": "distilled (default, fastest) | two-stage | two-stages-hq | one-stage",

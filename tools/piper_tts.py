@@ -12,7 +12,7 @@ Usage:
 
 Setup:
     Binary:  ~/.local/bin/piper (already installed, on PATH as `piper`)
-    Voice:   ~/AI-Modelle/piper/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx
+    Voice:   ~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/piper/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx
 """
 
 import argparse
@@ -28,7 +28,7 @@ VOICES = {
     "thorsten": (
         "German Male",
         "Thorsten (high quality) — default local German voice",
-        Path.home() / "PROJEKTE" / "AI-Modelle" / "piper" / "de" / "de_DE" / "thorsten" / "high"
+        Path.home() / "Hannibal" / "02_AI" / "_Werkzeuge" / "Modelle" / "AI-Modelle" / "piper" / "de" / "de_DE" / "thorsten" / "high"
         / "de_DE-thorsten-high.onnx",
     ),
 }

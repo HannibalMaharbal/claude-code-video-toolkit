@@ -203,7 +203,7 @@ python tools/voiceover.py --provider piper --scene-dir public/audio/scenes --jso
 python tools/voiceover.py --provider piper --piper-speed 0.9 --script script.txt --output out.mp3
 ```
 
-Model: `~/AI-Modelle/piper/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx`. `--speed` is a multiplier (>1 = faster), consistent with the other providers; converted internally to Piper's native `--length-scale`.
+Model: `~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/piper/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx`. `--speed` is a multiplier (>1 = faster), consistent with the other providers; converted internally to Piper's native `--length-scale`.
 
 ### Gemini TTS (Standalone, cloud, low-cost)
 
@@ -334,7 +334,7 @@ python tools/chain_video.py --scenes-dir images/ --output-dir videos/ --end 5 --
 python tools/ltx25_mlx_adapter.py --prompt "..." --mode two-stages-hq --output hq.mp4   # native HQ defaults, no TeaCache
 ```
 
-Runtime: `~/PROJEKTE/AI-Modelle/ltx-2-mlx` (github.com/MrMoferFRAN/ltx-2-mlx, branch `ltx25`, pinned commit `57952288`). Weights: `~/PROJEKTE/AI-Modelle/ltx-2.5-mlx-q8`. `--low-ram` (block streaming) is on by default and mandatory at 24GB RAM — the full model needs ~72GB without it. The shared adapter automatically adds continuity, motivated camera motion, anti-flicker and reference-lock constraints. `--continue-from` decodes the exact final frame available from the preceding clip into a temporary lossless PNG and supplies it as the next clip's first-frame conditioning anchor; the temporary file is removed after the run. It cannot be combined with `--image`. Of the modes installed in this pinned MLX runtime, `two-stages-hq` is the maximum-quality choice: it keeps the native 15-step `res_2s` path and disables TeaCache. `two-stage` is the balanced accelerated choice; `distilled` remains the fastest and only live-verified default.
+Runtime: `~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/ltx-2-mlx` (github.com/MrMoferFRAN/ltx-2-mlx, branch `ltx25`, pinned commit `57952288`). Weights: `~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/ltx-2.5-mlx-q8`. `--low-ram` (block streaming) is on by default and mandatory at 24GB RAM — the full model needs ~72GB without it. The shared adapter automatically adds continuity, motivated camera motion, anti-flicker and reference-lock constraints. `--continue-from` decodes the exact final frame available from the preceding clip into a temporary lossless PNG and supplies it as the next clip's first-frame conditioning anchor; the temporary file is removed after the run. It cannot be combined with `--image`. Of the modes installed in this pinned MLX runtime, `two-stages-hq` is the maximum-quality choice: it keeps the native 15-step `res_2s` path and disables TeaCache. `two-stage` is the balanced accelerated choice; `distilled` remains the fastest and only live-verified default.
 
 Production capability boundaries and the evidence-based LoRA/alpha/realtime
 assessment are documented in
@@ -368,7 +368,7 @@ python tools/seedvr2_mlx_adapter.py --input soft.mp4 --output restored.mp4 \
 ```
 
 Runtime entry point: `mflux-upscale-seedvr2` from the locally installed
-`mlx-gen`. Weights: `~/AI-Modelle/SeedVR2-MLX-4bit`. Defaults are conservative
+`mlx-gen`. Weights: `~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/SeedVR2-MLX-4bit`. Defaults are conservative
 for a 24 GB Mac: `1x`, wavelet color correction, low-RAM mode, 1 GB MLX cache,
 49-frame temporal chunks and 16-frame overlap.
 

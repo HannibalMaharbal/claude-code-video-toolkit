@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-MODEL_PATH = Path.home() / "AI-Modelle" / "SeedVR2-MLX-4bit"
+MODEL_PATH = Path.home() / "Hannibal" / "02_AI" / "_Werkzeuge" / "Modelle" / "AI-Modelle" / "SeedVR2-MLX-4bit"
 COLOR_CORRECTIONS = ("wavelet", "lab", "off")
 GUARDED_OVERRIDE_SYSTEM_RESERVE_BYTES = 2 * (1000**3)
 GUARDED_OVERRIDE_MIN_AVAILABLE_BYTES = 13 * (1000**3)

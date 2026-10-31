@@ -20,7 +20,7 @@ canvas size already satisfy both (24n+1 = 8*(3n)+1; every width/height in
 use is a multiple of 32), so --frames/--width/--height pass through
 unchanged, no retiming/rescaling step needed on this side.
 
-Runtime pin (per the model card at ~/AI-Modelle/ltx-2.5-mlx-q8/README.md):
+Runtime pin (per the model card at ~/Hannibal/02_AI/_Werkzeuge/Modelle/AI-Modelle/ltx-2.5-mlx-q8/README.md):
     https://github.com/MrMoferFRAN/ltx-2-mlx, branch `ltx25`,
     commit 57952288076766abe27dda3a774b2c24f7346977.
 """
@@ -36,8 +36,8 @@ import tempfile
 import time
 from pathlib import Path
 
-RUNTIME_DIR = Path.home() / "PROJEKTE" / "AI-Modelle" / "ltx-2-mlx"
-MODEL_PATH = Path.home() / "PROJEKTE" / "AI-Modelle" / "ltx-2.5-mlx-q8"
+RUNTIME_DIR = Path.home() / "Hannibal" / "02_AI" / "_Werkzeuge" / "Modelle" / "AI-Modelle" / "ltx-2-mlx"
+MODEL_PATH = Path.home() / "Hannibal" / "02_AI" / "_Werkzeuge" / "Modelle" / "AI-Modelle" / "ltx-2.5-mlx-q8"
 PROGRESS_PATHS = [
     Path.home() / ".claude" / "rate-limit-bridge" / "render_status.json",
     Path(__file__).resolve().parents[1] / "render_status.json",
