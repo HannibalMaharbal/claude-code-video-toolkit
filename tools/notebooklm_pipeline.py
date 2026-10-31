@@ -179,7 +179,7 @@ def main():
 
     # Query command
     q_parser = subparsers.add_parser("query", help="Gefilterte Quellen-Abfrage")
-    q_parser.add_argument("notebook", help="Notebook Name oder Alias (z. B. licbarska, zinzino, video)")
+    q_parser.add_argument("notebook", help="Notebook Name oder Alias (z. B. licbarska, video)")
     q_parser.add_argument("query", help="Die Frage an die Quellen")
 
     # Storyboard command
