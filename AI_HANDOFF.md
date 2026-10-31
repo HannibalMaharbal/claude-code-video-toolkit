@@ -1,3 +1,43 @@
+## VTK-LTX25-GUARDRAILS — Produktions-Guardrails & Parameter-Update, 2026-10-31
+
+- **Schreibender Agent:** Antigravity CLI (`agy`)
+- **Prüf-Sitzung & Blickwinkel:** Host-Terminal Antigravity (Apple M4 Pro 24 GB)
+- **Freigabestufe:** Stufe 1 (Benachrichtigung / Dokumentation & Skill-Update)
+- **Unabhängiger Reviewer:** Claude Code / Hannibal
+
+### 1. Status
+- **Status:** Umgesetzt & dokumentiert
+- **Ziel / Kontext:** Verankerung der 5-Sterne LTX 2.5 Best Practices (Full-Scale First Pass Anti-Blur, Lykon MSR 50 FPS Pflicht, LoRA Max-2 Limit, Audio-Lock, Candidate Seed-Hunting).
+
+### 2. Geänderte Dateien & Diff-Nachweis
+- **Repository / Worktree / Branch:** `~/Hannibal/02_AI/Projekte/video-toolkit` (main)
+- **Dateien:**
+  - [`docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`](file:///Users/constantinbarhoumi/Hannibal/02_AI/Projekte/video-toolkit/docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md#L128-L144)
+  - [`~/.agents/skills/sota-media-engine/SKILL.md`](file:///Users/constantinbarhoumi/.agents/skills/sota-media-engine/SKILL.md#L55-L65)
+- **Diff-Stat:** `docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md | 16 ++++++++++++++++`
+
+### 3. Harte Verifikation & Evidenz (Proof of Work)
+- **Prüftiefe:** STATISCH & SYNTAX (Dokumentations- und Skill-Integrität)
+- **Ausgeführter Befehl:** `git diff docs/LTX-PRODUCTION-ASSESSMENT-2026-10-20.md`
+- **Exit-Code:** `$? = 0`
+- **Roh-Ausschnitt:**
+  ```text
+  +## Produktions-Guardrails & Parameter-Erkenntnisse (Stand: 31. Oktober 2026)
+  +1. Full-Scale First Pass (Anti-Blur): 0.5-Latent-Downscaling vermeiden; two-stages-hq / HERO wählen.
+  +2. Lykon MSR Character-Locking (50 FPS Pflicht): Keine RIFE-Interpolation.
+  +3. LoRA-Stacking Obergrenze (Max. 2 LoRAs).
+  +4. Audio-Lock: O-Ton unverändert bis DaVinci Fairlight (-14 LUFS).
+  +5. Seed-Hunting vor Master-Render.
+  ```
+
+### 4. Was explizit NICHT getestet wurde
+- Kein GPU-Renderlauf ausgelöst (reine Parameter- und Skill-Definition).
+
+### 5. Freigabe- & Entscheidungsbedarf
+- Keine Freigabe nötig für Doku/Skill. Git-Commit ist vorbereitet und wartet auf Hannibals Bestätigung.
+
+---
+
 ## VTK-SMART-UPSCALE-LIVE — Übergabe an Claude, 2026-10-29
 
 - Fortsetzung und Freigabegrenzen: `docs/smart-upscale-review/CLAUDE_HANDOFF.md`; Review-Auftrag: `docs/smart-upscale-review/REVIEW.md`. Ein lokaler Diff-Snapshot liegt unter `scratch/smart-upscale-review/changes.diff`.

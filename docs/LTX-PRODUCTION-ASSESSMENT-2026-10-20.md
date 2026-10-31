@@ -125,6 +125,22 @@ Layout to Render als `planned`, Alpha Gen als `blocked`. Der aktive
 Produktionspfad bleibt der lokale MLX-Adapter für Previsualisierung, I2V und
 Mehrclip-Fortsetzung mit anschließendem DaVinci-Gate.
 
+## Produktions-Guardrails & Parameter-Erkenntnisse (Stand: 31. Oktober 2026)
+
+Übernommen aus einem ComfyUI/NVIDIA-Workflow-Video (Stuubzzz, 31.10.2026), **nicht auf dem M4 gemessen**. Verbindlich sind nur 4 (Audio-Lock) und 5 (Seed-Hunting); 1–3 sind Hypothesen bis zum Testlauf. `res_2s` und `HERO` existieren im MLX-Adapter nicht, Lykon MSR wird nicht eingesetzt.
+
+1. ⚠️ (Hypothese) **Full-Scale First Pass (Anti-Blur):**
+   - 0.5-Latent-Downscaling ist die Hauptursache für verwaschene, unscharfe Texturen („mushy look“).
+   - In unserem MLX-Stack immer `two-stages-hq` (15 Steps `res_2s`, ohne TeaCache) bzw. das `HERO`-Profil (1024×576) wählen, gefolgt von hardwarebeschleunigtem VideoToolbox Lanczos-3 CAS (0,35–0,45).
+2. ⚠️ (Hypothese) **Lykon MSR Character-Locking (50 FPS Pflicht):**
+   - Wird *Lykon MSR* für Gesichts- und Character-Konsistenz eingesetzt, muss die Inferenz nativ auf **50 FPS** laufen. RIFE- oder KI-Frame-Interpolation muss auf 0/deaktiviert bleiben, da MSR fest auf 50 FPS trainiert ist.
+3. ⚠️ (Hypothese) **LoRA-Stacking Obergrenze (Max. 2 LoRAs):**
+   - Niemals mehr als 2 LoRAs gleichzeitig laden (z. B. max. 1 Character/MSR-LoRA + 1 Motion/IC-LoRA). Ab 3 LoRAs kollabiert die Bildkohärenz von LTX 2.5.
+4. **Audio-Lock:**
+   - Der synchrone O-Ton aus der Erstgenerierung wird verriegelt und unverändert durchgeschleift. Niemals den Ton während Upscaling/Filterung re-synthetisieren; finales Mastering ausschließlich im DaVinci Resolve Fairlight-Gate (-14 LUFS).
+5. **Seed-Hunting vor Master-Render:**
+   - Vor aufwendigen langen Renderläufen 2 bis 4 Test-Seeds generieren, den besten Seed bestimmen und erst diesen durch das finale Pipeline-Gate schicken.
+
 ## Primärquellen
 
 - Offizielles LTX-Repository: <https://github.com/Lightricks/LTX-Video>
