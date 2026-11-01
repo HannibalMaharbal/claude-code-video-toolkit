@@ -43,7 +43,14 @@ else:
     TOOLKIT_ROOT = Path(__file__).resolve().parents[1]
 
 from tools.audio_mix import mix  # noqa: E402
-from tools.ltx25_mlx_adapter import generate_video  # noqa: E402
+
+
+def generate_video(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Fallback stub when LTX-2.5 local engine is not installed."""
+    return {
+        "success": False,
+        "error": "LTX-2.5 local engine ist auf diesem System nicht installiert.",
+    }
 
 
 def run_voiceover(

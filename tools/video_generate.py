@@ -210,6 +210,12 @@ def _run_ltx_draft(
 ) -> int:
     preset = LOCAL_PROFILE_PRESETS[local_profile]
     adapter = TOOLKIT_ROOT / "tools" / "ltx25_mlx_adapter.py"
+    if not adapter.is_file():
+        print(
+            "[1. Lokal-First] LTX-2.5 MLX ist auf diesem System nicht installiert.",
+            file=sys.stderr,
+        )
+        return 1
     cmd = [
         sys.executable,
         str(adapter),
