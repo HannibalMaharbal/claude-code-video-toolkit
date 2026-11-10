@@ -8,11 +8,37 @@ import pytest
 from tools import resolve_adapter
 
 
+class FakeFolder:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.subfolders: list[FakeFolder] = []
+
+    def GetName(self) -> str:  # noqa: N802
+        return self.name
+
+    def GetSubFolderList(self) -> list[FakeFolder]:  # noqa: N802
+        return self.subfolders
+
+
 class FakeMediaPool:
     def __init__(self) -> None:
         self.imported: list[str] = []
         self.created: tuple[str, list[object]] | None = None
         self.appended: list[object] | None = None
+        self.root_folder = FakeFolder("Master")
+        self.current_folder = self.root_folder
+
+    def GetRootFolder(self) -> FakeFolder:  # noqa: N802
+        return self.root_folder
+
+    def AddSubFolder(self, parent: FakeFolder, name: str) -> FakeFolder:  # noqa: N802
+        new_folder = FakeFolder(name)
+        parent.subfolders.append(new_folder)
+        return new_folder
+
+    def SetCurrentFolder(self, folder: FakeFolder) -> bool:  # noqa: N802
+        self.current_folder = folder
+        return True
 
     def ImportMedia(self, paths: list[str]) -> list[object]:  # noqa: N802 - Resolve API spelling
         self.imported = paths
@@ -32,6 +58,7 @@ class FakeProject:
         self.media_pool = media_pool
         self.timeline = timeline
         self.settings: dict[str, object] | None = None
+        self.project_settings: dict[str, str] = {}
         self.loaded_preset: str | None = None
 
     def GetMediaPool(self) -> FakeMediaPool:  # noqa: N802
@@ -39,6 +66,10 @@ class FakeProject:
 
     def GetCurrentTimeline(self) -> object | None:  # noqa: N802
         return self.timeline
+
+    def SetSetting(self, key: str, value: str) -> bool:  # noqa: N802
+        self.project_settings[key] = value
+        return True
 
     def LoadRenderPreset(self, preset: str) -> bool:  # noqa: N802
         self.loaded_preset = preset
@@ -147,3 +178,62 @@ def test_queue_render_adds_job_but_never_starts_rendering(tmp_path: Path) -> Non
 def test_queue_render_requires_existing_directory(tmp_path: Path) -> None:
     with pytest.raises(resolve_adapter.ResolveAdapterError, match="existiert nicht"):
         resolve_adapter.queue_render(tmp_path / "missing", session=SimpleNamespace())
+
+
+def test_setup_bins_creates_default_bins() -> None:
+    media_pool = FakeMediaPool()
+    project = FakeProject(media_pool)
+
+    res = resolve_adapter.setup_bins(session=_session(project))
+
+    assert res["status"] == "ok"
+    assert res["created_count"] == len(resolve_adapter.DEFAULT_BINS)
+    subfolder_names = [f.GetName() for f in media_pool.root_folder.GetSubFolderList()]
+    assert "01_A-Roll_Voice" in subfolder_names
+    assert "05_Renders" in subfolder_names
+
+
+def test_import_to_bin_switches_folder_and_imports(tmp_path: Path) -> None:
+    media = tmp_path / "b_roll.mp4"
+    media.write_bytes(b"sample")
+    media_pool = FakeMediaPool()
+    project = FakeProject(media_pool)
+
+    res = resolve_adapter.import_to_bin("02_B-Roll_Visuals", [media], session=_session(project))
+
+    assert res["bin"] == "02_B-Roll_Visuals"
+    assert res["imported_clips"] == 1
+    assert media_pool.imported == [str(media.resolve())]
+    assert media_pool.current_folder == media_pool.root_folder
+
+
+def test_setup_project_configures_vertical_resolution() -> None:
+    media_pool = FakeMediaPool()
+    project = FakeProject(media_pool)
+
+    res = resolve_adapter.setup_project("Licbarska_Reel", vertical=True, fps=30.0, session=_session(project))
+
+    assert res["project_name"] == "Licbarska_Reel"
+    assert res["vertical"] is True
+    assert project.project_settings["timelineResolutionWidth"] == "1080"
+    assert project.project_settings["timelineResolutionHeight"] == "1920"
+    assert project.project_settings["timelineFrameRate"] == "30.0"
+
+
+def test_fairlight_gate_requires_active_timeline() -> None:
+    media_pool = FakeMediaPool()
+    project = FakeProject(media_pool, timeline=None)
+
+    with pytest.raises(resolve_adapter.ResolveAdapterError, match="Keine aktive Timeline"):
+        resolve_adapter.apply_fairlight_gate(session=_session(project))
+
+
+def test_fairlight_gate_succeeds_with_timeline() -> None:
+    media_pool = FakeMediaPool()
+    project = FakeProject(media_pool, timeline=object())
+
+    res = resolve_adapter.apply_fairlight_gate(target_lufs=-14.0, session=_session(project))
+
+    assert res["status"] == "gate_ready"
+    assert res["target_lufs"] == -14.0
+

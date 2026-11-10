@@ -1,0 +1,38 @@
+{
+  "brandName": "LICBARSKA",
+  "brandTagline": "Consulting & Immobilien",
+  "badgeText": "B2B ANALYSE 2026",
+  "hookHeadline": "3 KARDINALFEHLER BEIM MEHRFAMILIENHAUS-VERKAUF",
+  "hookSubline": "Warum Eigentümer aktuell bis zu 22% Rendite verschenken",
+  "statHighlight": {
+    "value": "-22%",
+    "label": "Wertverlust durch falsche Vermarktung",
+    "subtitle": "Basierend auf 140+ Transaktionen im DACH-Raum",
+    "trend": "down"
+  },
+  "keyPoints": [
+    {
+      "index": 1,
+      "title": "Verkauf ohne Sanierungsfahrplan",
+      "detail": "Käufer preisen unklare ESG-Risiken mit bis zu 15% Abschlag ein."
+    },
+    {
+      "index": 2,
+      "title": "Öffentliche Portale statt Off-Market",
+      "detail": "Inserate verbrennen das Objekt bei solventen Family Offices."
+    },
+    {
+      "index": 3,
+      "title": "Fehlendes Mietpotenzial-Gutachten",
+      "detail": "Ungehobene Mietsteigerungen werden dem Käufer kostenlos überlassen."
+    }
+  ],
+  "cta": {
+    "headline": "OBJEKT DISKRET PRÜFEN LASSEN",
+    "subline": "Kostenfreie Potenzial-Analyse für institutionelle & private Eigentümer",
+    "badge": "Off-Market Dealflow",
+    "url": "licbarska.de"
+  },
+  "fps": 30,
+  "durationInSeconds": 15
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@video-toolkit/template-b2b-reel",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "description": "High-impact B2B Remotion template for vertical reels, shorts and LinkedIn videos",
+  "scripts": {
+    "studio": "npx remotion studio",
+    "typecheck": "tsc --noEmit",
+    "render": "npx remotion render src/index.ts B2BReel out/b2b-reel.mp4 --crf=17",
+    "render:preview": "npx remotion render src/index.ts B2BReel out/preview.mp4 --scale=0.5 --crf=23",
+    "build": "npx remotion bundle src/index.ts"
+  },
+  "dependencies": {
+    "@video-toolkit/remotion-shared": "1.0.0",
+    "@remotion/cli": "4.0.526",
+    "@remotion/shapes": "4.0.526",
+    "@remotion/transitions": "4.0.526",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "4.0.526"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}
