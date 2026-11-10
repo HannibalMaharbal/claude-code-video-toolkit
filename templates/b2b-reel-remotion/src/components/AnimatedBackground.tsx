@@ -1,16 +1,14 @@
 import React from 'react';
-import { interpolate, useCurrentFrame } from 'remotion';
+import { useCurrentFrame, useVideoConfig } from 'remotion';
 
 export const AnimatedBackground: React.FC = () => {
   const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
 
-  const glowShift1 = interpolate(frame, [0, 450], [0, 30], {
-    extrapolateRight: 'clamp',
-  });
-
-  const glowShift2 = interpolate(frame, [0, 450], [0, -40], {
-    extrapolateRight: 'clamp',
-  });
+  // Seamless Loop Engineering: Full 2*PI oscillation guarantees frame 0 and final frame match
+  const loopCycle = (frame / Math.max(1, durationInFrames)) * Math.PI * 2;
+  const glowShift1 = Math.sin(loopCycle) * 30;
+  const glowShift2 = Math.cos(loopCycle) * 40 - 40;
 
   return (
     <div

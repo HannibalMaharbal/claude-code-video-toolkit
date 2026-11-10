@@ -176,6 +176,7 @@ def main() -> int:
     parser.add_argument("--num-clips", type=int, default=3, help="Number of highlights to find.")
     parser.add_argument("--target-duration", type=float, default=40.0, help="Target clip duration in seconds.")
     parser.add_argument("--cut", action="store_true", help="Cut raw clips using ffmpeg.")
+    parser.add_argument("--autocrop", action="store_true", help="Automatically reframe cut clips to 9:16 vertical using Smart Face-Centering.")
     parser.add_argument("--json", action="store_true", help="Output JSON only.")
     args = parser.parse_args()
 
@@ -211,10 +212,18 @@ def main() -> int:
 
         clips = find_top_clips(segments, target_duration=args.target_duration, max_clips=args.num_clips)
 
-        if args.cut and args.input.suffix.lower() in {".mp4", ".mov", ".mkv", ".m4a", ".mp3"}:
+        if (args.cut or args.autocrop) and args.input.suffix.lower() in {".mp4", ".mov", ".mkv", ".m4a", ".mp3"}:
             for c in clips:
                 clip_out = EXPORT_DIR / f"{args.input.stem}_clip_{c.index:02d}.mp4"
                 cut_clip_with_ffmpeg(args.input, c.start_sec, c.duration_sec, clip_out)
+                if args.autocrop and args.input.suffix.lower() in {".mp4", ".mov", ".mkv"}:
+                    from tools.smart_autocrop import smart_autocrop_video
+                    smart_autocrop_video(
+                        input_video=clip_out,
+                        output_dir=EXPORT_DIR,
+                        profile_name="youtube_short",
+                        render_video=True,
+                    )
 
         if args.json:
             print(json.dumps([asdict(c) for c in clips], indent=2, ensure_ascii=False))
