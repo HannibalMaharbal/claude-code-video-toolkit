@@ -1,5 +1,5 @@
 import React from 'react';
-import { interpolate, Sequence, useCurrentFrame, useVideoConfig } from 'remotion';
+import { Audio, interpolate, Sequence, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { HeaderHook } from './components/HeaderHook';
 import { StatCard } from './components/StatCard';
@@ -67,6 +67,20 @@ export const B2BReel: React.FC<B2BReelProps> = ({ data: propData }) => {
 
         <WordCaptions captions={data.captions} />
       </div>
+
+      {/* Audio SFX Cues */}
+      <Sequence from={0} durationInFrames={30}>
+        <Audio src={staticFile("sfx/bass_impact.mp3")} volume={0.3} />
+      </Sequence>
+      <Sequence from={15} durationInFrames={15}>
+        <Audio src={staticFile("sfx/ui_pop_clean.mp3")} volume={0.2} />
+      </Sequence>
+      <Sequence from={24} durationInFrames={20}>
+        <Audio src={staticFile("sfx/whoosh_subtle.mp3")} volume={0.15} />
+      </Sequence>
+      <Sequence from={ctaStartFrame} durationInFrames={30}>
+        <Audio src={staticFile("sfx/gold_shimmer.mp3")} volume={0.25} />
+      </Sequence>
 
       {/* CTA Sequence */}
       <Sequence from={ctaStartFrame} durationInFrames={100}>
