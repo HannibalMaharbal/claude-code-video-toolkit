@@ -9,8 +9,8 @@ Usage:
     # 1. Inspect & detect top highlight clips (0 € local processing):
     uv run tools/auto_clipper.py --input podcast.mp4 --num-clips 3
 
-    # 2. Extract & render ready-to-publish vertical reel:
-    uv run tools/auto_clipper.py --input podcast.mp4 --clip-index 1 --render
+    # 2. Extract & reframe vertical clips:
+    uv run tools/auto_clipper.py --input podcast.mp4 --cut --autocrop
 """
 
 from __future__ import annotations
@@ -29,7 +29,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "templates" / "b2b-reel-remotion"
-EXPORT_DIR = Path(os.path.expanduser("~/Hannibal/03_Export"))
+EXPORT_DIR = Path(os.path.expanduser("~/Hannibal/00_INBOX/Zu_Bearbeiten/Videos"))
+
+AUDIO_EXTENSIONS = {".mp3", ".m4a", ".wav", ".aac", ".flac"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv"}
 
 HIGH_RETENTION_KEYWORDS = {
     "fehler", "rendite", "verlust", "millionen", "strategie", "geheimnis",
@@ -48,6 +51,7 @@ class ClipCandidate:
     full_transcript: str
     retention_score: float
     word_count: int
+    type: str = "video"
 
 
 def score_segment(text: str, duration_sec: float) -> float:
@@ -96,6 +100,7 @@ def find_top_clips(
     segments: list[dict[str, Any]],
     target_duration: float = 40.0,
     max_clips: int = 3,
+    media_type: str = "video",
 ) -> list[ClipCandidate]:
     candidates: list[ClipCandidate] = []
     n = len(segments)
@@ -124,6 +129,7 @@ def find_top_clips(
                             full_transcript=combined,
                             retention_score=score,
                             word_count=len(combined.split()),
+                            type=media_type,
                         )
                     )
                 if dur >= target_duration * 1.35:
@@ -153,13 +159,18 @@ def cut_clip_with_ffmpeg(
     output_path: Path,
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    is_audio = input_video.suffix.lower() in AUDIO_EXTENSIONS
     cmd = [
         "ffmpeg", "-y",
         "-ss", str(start_sec),
         "-t", str(duration_sec),
         "-i", str(input_video),
-        "-c:v", "libx264",
-        "-c:a", "aac",
+    ]
+    if is_audio:
+        cmd += ["-vn", "-c:a", "copy" if input_video.suffix.lower() == output_path.suffix.lower() else "aac"]
+    else:
+        cmd += ["-c:v", "libx264", "-c:a", "aac"]
+    cmd += [
         "-avoid_negative_ts", "make_zero",
         str(output_path),
     ]
@@ -169,7 +180,16 @@ def cut_clip_with_ffmpeg(
     return output_path
 
 
-def main() -> int:
+def validate_autocrop_input(input_path: Path, autocrop: bool) -> None:
+    """Ensure --autocrop is only used with video files containing visual streams."""
+    if autocrop and input_path.suffix.lower() in AUDIO_EXTENSIONS:
+        raise ValueError(
+            f"--autocrop erfordert eine Video-Eingabe (.mp4, .mov, .mkv); "
+            f"Audiodateien ({input_path.suffix}) besitzen keine Videospur für Smart-Autocrop."
+        )
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="YouTube Longform-to-Shorts Auto-Clipper")
     parser.add_argument("--input", "-i", type=Path, required=True, help="Input video, audio or SRT file.")
     parser.add_argument("--srt", type=Path, help="Optional separate SRT file.")
@@ -178,9 +198,15 @@ def main() -> int:
     parser.add_argument("--cut", action="store_true", help="Cut raw clips using ffmpeg.")
     parser.add_argument("--autocrop", action="store_true", help="Automatically reframe cut clips to 9:16 vertical using Smart Face-Centering.")
     parser.add_argument("--json", action="store_true", help="Output JSON only.")
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
 
     try:
+        validate_autocrop_input(args.input, args.autocrop)
         segments = []
         if args.srt and args.srt.is_file():
             segments = parse_srt_or_segments(args.srt.read_text(encoding="utf-8"))
@@ -210,13 +236,21 @@ def main() -> int:
             print("Keine Transkript-Segmente gefunden.", file=sys.stderr)
             return 1
 
-        clips = find_top_clips(segments, target_duration=args.target_duration, max_clips=args.num_clips)
+        is_audio = args.input.suffix.lower() in AUDIO_EXTENSIONS
+        media_type = "audio" if is_audio else "video"
+        clips = find_top_clips(
+            segments,
+            target_duration=args.target_duration,
+            max_clips=args.num_clips,
+            media_type=media_type,
+        )
 
-        if (args.cut or args.autocrop) and args.input.suffix.lower() in {".mp4", ".mov", ".mkv", ".m4a", ".mp3"}:
+        if (args.cut or args.autocrop) and (args.input.suffix.lower() in VIDEO_EXTENSIONS or is_audio):
             for c in clips:
-                clip_out = EXPORT_DIR / f"{args.input.stem}_clip_{c.index:02d}.mp4"
+                clip_ext = args.input.suffix.lower() if is_audio else ".mp4"
+                clip_out = EXPORT_DIR / f"{args.input.stem}_clip_{c.index:02d}{clip_ext}"
                 cut_clip_with_ffmpeg(args.input, c.start_sec, c.duration_sec, clip_out)
-                if args.autocrop and args.input.suffix.lower() in {".mp4", ".mov", ".mkv"}:
+                if args.autocrop and args.input.suffix.lower() in VIDEO_EXTENSIONS:
                     from tools.smart_autocrop import smart_autocrop_video
                     smart_autocrop_video(
                         input_video=clip_out,

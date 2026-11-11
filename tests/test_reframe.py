@@ -41,11 +41,64 @@ def test_smooth_keyframes_moves_toward_next_point() -> None:
     assert smoothed[1]["cx"] == pytest.approx(0.5)
 
 
+def test_smooth_keyframes_resets_on_cut_larger_than_threshold() -> None:
+    keyframes = [{"t": 0.0, "cx": 0.2, "cy": 0.5}, {"t": 1.0, "cx": 0.8, "cy": 0.5}]
+    smoothed = reframe.smooth_keyframes(keyframes, alpha=0.5, cut_threshold=0.1582)
+    assert smoothed[0]["cx"] == pytest.approx(0.2)
+    assert smoothed[1]["cx"] == pytest.approx(0.8)
+
+
+def test_vertical_cut_detection_resets_smoothing_and_steps_focus() -> None:
+    keyframes = [{"t": 0.0, "cx": 0.5, "cy": 0.2}, {"t": 1.0, "cx": 0.5, "cy": 0.8}]
+    half_crop_h = 0.1582
+    smoothed = reframe.smooth_keyframes(
+        keyframes, alpha=0.5, cut_threshold=None, cut_threshold_y=half_crop_h
+    )
+    assert smoothed[0]["cy"] == pytest.approx(0.2)
+    assert smoothed[1]["cy"] == pytest.approx(0.8)
+
+    assert reframe.focus_at(keyframes, 0.49, cut_threshold=None, cut_threshold_y=half_crop_h) == (0.5, 0.2)
+    assert reframe.focus_at(keyframes, 0.5, cut_threshold=None, cut_threshold_y=half_crop_h) == (0.5, 0.8)
+    assert reframe.focus_at(keyframes, 1.0, cut_threshold=None, cut_threshold_y=half_crop_h) == (0.5, 0.8)
+
+
+
+
 def test_focus_at_interpolates_linearly() -> None:
     keyframes = [{"t": 0.0, "cx": 0.0, "cy": 0.0}, {"t": 2.0, "cx": 1.0, "cy": 0.0}]
     assert reframe.focus_at(keyframes, 1.0) == pytest.approx((0.5, 0.0))
     assert reframe.focus_at(keyframes, -1.0) == (0.0, 0.0)
     assert reframe.focus_at(keyframes, 10.0) == (1.0, 0.0)
+
+
+def test_focus_at_holds_prior_focus_across_cut_until_midpoint_then_switches() -> None:
+    keyframes = [{"t": 0.0, "cx": 0.2, "cy": 0.5}, {"t": 2.0, "cx": 0.8, "cy": 0.5}]
+    # Without cut_threshold: standard linear interpolation
+    assert reframe.focus_at(keyframes, 1.0) == pytest.approx((0.5, 0.5))
+
+    # With cut_threshold: jump > threshold means step function switching at midpoint ((0.0 + 2.0) / 2 = 1.0)
+    # Vor der Mitte: alter Fokus
+    assert reframe.focus_at(keyframes, 0.5, cut_threshold=0.3) == (0.2, 0.5)
+    assert reframe.focus_at(keyframes, 0.99, cut_threshold=0.3) == pytest.approx((0.2, 0.5))
+    # Ab der Mitte: neuer Fokus
+    assert reframe.focus_at(keyframes, 1.0, cut_threshold=0.3) == (0.8, 0.5)
+    assert reframe.focus_at(keyframes, 1.99, cut_threshold=0.3) == pytest.approx((0.8, 0.5))
+    assert reframe.focus_at(keyframes, 2.0, cut_threshold=0.3) == (0.8, 0.5)
+    assert reframe.focus_at(keyframes, 2.5, cut_threshold=0.3) == (0.8, 0.5)
+
+
+def test_compute_segment_bounds_includes_cut_midpoints() -> None:
+    keyframes = [
+        {"t": 0.0, "cx": 0.2, "cy": 0.5},
+        {"t": 1.0, "cx": 0.8, "cy": 0.5},
+    ]
+    bounds = reframe.compute_segment_bounds(keyframes, 1.0, cut_threshold=0.25, cut_threshold_y=0.25)
+    assert 0.5 in bounds
+    assert bounds == [0.0, 0.5, 1.0]
+    # Fokus im Segment [0, 0.5] (ausgewertet am Segmentmittelpunkt 0.25) = 0.2
+    assert reframe.focus_at(keyframes, 0.25, cut_threshold=0.25, cut_threshold_y=0.25) == (0.2, 0.5)
+    # Fokus im Segment [0.5, 1.0] (ausgewertet am Segmentmittelpunkt 0.75) = 0.8
+    assert reframe.focus_at(keyframes, 0.75, cut_threshold=0.25, cut_threshold_y=0.25) == (0.8, 0.5)
 
 
 def test_compute_crop_window_follows_focus_left_vs_right() -> None:
@@ -189,6 +242,33 @@ def test_crop_visibly_follows_a_marker_at_different_focus_points(tmp_path: Path)
 
     assert on_marker[0] > 150 and on_marker[1] < 100 and on_marker[2] < 100  # red at center
     assert not (off_marker[0] > 150 and off_marker[1] < 100 and off_marker[2] < 100)
+
+
+def test_render_vertical_source_to_horizontal_target_with_vertical_cut(tmp_path: Path) -> None:
+    path = tmp_path / "vertical_source.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=size=720x1280:rate=10",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+            "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(path),
+        ],
+        check=True, capture_output=True,
+    )
+    spec = tmp_path / "focus_vertical_cut.json"
+    spec.write_text(
+        json.dumps({
+            "keyframes": [
+                {"t": 0.0, "cx": 0.5, "cy": 0.2},
+                {"t": 0.5, "cx": 0.5, "cy": 0.8},
+            ]
+        }),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out_horizontal.mp4"
+    res = reframe.render(path, "ad_16x9", out, focus_spec_path=spec)
+    assert out.is_file() and out.stat().st_size > 0
+    assert res["segments"] == 3
+
 
 
 # --- registration: real asset_record, real schema validation -----------------------

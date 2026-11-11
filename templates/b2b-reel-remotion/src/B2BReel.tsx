@@ -13,12 +13,22 @@ export interface B2BReelProps {
   data?: B2BReelData;
 }
 
+const isAllowedAudioSrc = (src?: string): src is string => {
+  if (!src) return false;
+  if (src.includes('://') || src.startsWith('/') || !src.startsWith('_runtime_voiceover/')) {
+    return false;
+  }
+  const segments = src.split('/');
+  return !segments.some((seg) => seg === '..' || seg === '.');
+};
+
 export const B2BReel: React.FC<B2BReelProps> = ({ data: propData }) => {
   const data = propData || (defaultSampleData as B2BReelData);
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const { durationInFrames, fps } = useVideoConfig();
 
-  const ctaStartFrame = durationInFrames - 100; // Last ~3.3 seconds for CTA
+  const ctaDurationInFrames = Math.round(3.5 * fps);
+  const ctaStartFrame = durationInFrames - ctaDurationInFrames;
 
   const bodyOpacity = interpolate(
     frame,
@@ -68,6 +78,11 @@ export const B2BReel: React.FC<B2BReelProps> = ({ data: propData }) => {
         <WordCaptions captions={data.captions} />
       </div>
 
+      {/* Voiceover Audio */}
+      {isAllowedAudioSrc(data.audioSrc) && (
+        <Audio src={staticFile(data.audioSrc)} />
+      )}
+
       {/* Audio SFX Cues */}
       <Sequence from={0} durationInFrames={30}>
         <Audio src={staticFile("sfx/bass_impact.mp3")} volume={0.3} />
@@ -83,7 +98,7 @@ export const B2BReel: React.FC<B2BReelProps> = ({ data: propData }) => {
       </Sequence>
 
       {/* CTA Sequence */}
-      <Sequence from={ctaStartFrame} durationInFrames={100}>
+      <Sequence from={ctaStartFrame} durationInFrames={ctaDurationInFrames}>
         <CtaCard cta={data.cta} brandName={data.brandName} />
       </Sequence>
     </div>

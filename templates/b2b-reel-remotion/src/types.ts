@@ -25,6 +25,7 @@ export interface CallToAction {
 }
 
 export interface B2BReelData {
+  _hinweis?: string;
   brandName: string;
   brandTagline?: string;
   badgeText: string;

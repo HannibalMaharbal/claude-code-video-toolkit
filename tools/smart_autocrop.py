@@ -9,7 +9,7 @@ Automatically reframes 16:9 landscape video into 9:16 vertical Shorts/Reels:
 5. Generates the standard focus_spec.json and renders high-definition 9:16 video.
 
 Usage:
-    uv run tools/smart_autocrop.py --input video.mp4 --output-dir ~/Hannibal/03_Export/
+    uv run tools/smart_autocrop.py --input video.mp4 --output-dir ~/Hannibal/00_INBOX/Zu_Bearbeiten/Videos/
     uv run tools/smart_autocrop.py --input video.mp4 --profile youtube_short --spec-only
 """
 
@@ -181,6 +181,8 @@ def build_focus_spec(
     *,
     deadband_threshold: float = 0.04,
     smoothing_alpha: float = 0.4,
+    source_ratio: float = 16.0 / 9.0,
+    target_ratio: float = 9.0 / 16.0,
 ) -> list[dict[str, Any]]:
     """Analyze frames and produce smooth, stabilized keyframes."""
     if not sampled_frames:
@@ -211,15 +213,24 @@ def build_focus_spec(
 
         raw_keyframes.append({"t": t, "cx": cx, "cy": cy, "box": box})
 
-    # Temporal smoothing
-    smoothed = reframe.smooth_keyframes(raw_keyframes, alpha=smoothing_alpha)
+    # Single smoothing: reframe.render() handles temporal smoothing.
+    keyframes = raw_keyframes
 
-    # Safe bounds clamp for vertical 9:16 safe-zones
-    for kf in smoothed:
-        kf["cx"] = round(max(0.2, min(0.8, float(kf["cx"]))), 4)
-        kf["cy"] = round(max(0.25, min(0.75, float(kf["cy"]))), 4)
+    # Derive valid cx crop center range from actual target crop width
+    # For 16:9 source and 9:16 target: crop_w_rel = (9/16)/(16/9) = 81/256 ≈ 0.3164
+    # half_crop_w ≈ 0.1582. Center must be in [half_crop_w, 1.0 - half_crop_w] so
+    # the 9:16 crop window stays within [0.0, 1.0] and faces up to 1.0 remain framed.
+    crop_w_rel = min(1.0, target_ratio / source_ratio) if source_ratio > target_ratio else 1.0
+    half_crop_w = crop_w_rel / 2.0
+    cx_min = round(half_crop_w, 4)
+    cx_max = round(1.0 - half_crop_w, 4)
 
-    return smoothed
+    for kf in keyframes:
+        kf["cx"] = round(max(cx_min, min(cx_max, float(kf["cx"]))), 4)
+        # cy preserves the true measured vertical position [0, 1]; not artificially clamped
+        kf["cy"] = round(max(0.0, min(1.0, float(kf["cy"]))), 4)
+
+    return keyframes
 
 
 def smart_autocrop_video(
@@ -229,6 +240,7 @@ def smart_autocrop_video(
     profile_name: str = "youtube_short",
     sample_interval: float = 1.0,
     render_video: bool = True,
+    strict_safe_zone: bool = False,
 ) -> dict[str, Any]:
     """Full pipeline: Sample -> Track -> Build Spec -> Render 9:16 Crop."""
     if not input_video.is_file():
@@ -238,17 +250,52 @@ def smart_autocrop_video(
     temp_dir = Path(tempfile.mkdtemp(prefix="autocrop_"))
 
     try:
+        # Detect source dimensions to derive aspect ratios & check safe zones
+        try:
+            meta = probe_media(input_video)
+            w = meta.get("width")
+            h = meta.get("height")
+            if not isinstance(w, int) or not isinstance(h, int) or w <= 0 or h <= 0:
+                raise AutoCropError(f"Ungültige Videoauflösung in Medienmetadaten: {w}x{h}")
+            src_w = w
+            src_h = h
+        except AutoCropError:
+            raise
+        except Exception as err:
+            raise AutoCropError(f"Metadaten des Videos konnten nicht ermittelt werden: {err}") from err
+        source_ratio = src_w / max(1, src_h)
+
         # 1. Sample frames
         frames = sample_frames(input_video, temp_dir, sample_interval=sample_interval)
 
+        # Load target profile
+        profile = platform_profiles.get_profile(profile_name)
+        target_w = int(profile["resolution"]["width"])
+        target_h = int(profile["resolution"]["height"])
+        target_ratio = target_w / max(1, target_h)
+
         # 2. Build Focus Spec
-        keyframes = build_focus_spec(frames)
-        spec_data = {
+        keyframes = build_focus_spec(
+            frames,
+            source_ratio=source_ratio,
+            target_ratio=target_ratio,
+        )
+
+        # Safe-zone audit: inspect without distorting cy measurements
+        warnings = reframe.check_safe_zone(keyframes, profile, src_w, src_h)
+        if warnings and strict_safe_zone:
+            raise AutoCropError(
+                f"Safe-Zone-Verletzung erkannt (--strict-safe-zone): {'; '.join(warnings)}"
+            )
+
+        spec_data: dict[str, Any] = {
             "version": "1.0",
             "source_video": str(input_video.resolve()),
             "profile": profile_name,
             "keyframes": keyframes,
         }
+        if warnings:
+            spec_data["warnings"] = warnings
 
         spec_file = output_dir / f"{input_video.stem}_focus_spec.json"
         spec_file.write_text(json.dumps(spec_data, indent=2), encoding="utf-8")
@@ -262,15 +309,18 @@ def smart_autocrop_video(
                 profile_name=profile_name,
                 output_path=rendered_video_path,
                 focus_spec_path=spec_file,
+                allow_safe_zone_violation=True,
             )
 
+        status_str = "success_with_warnings" if warnings else "success"
         return {
-            "status": "success",
+            "status": status_str,
             "source": str(input_video),
             "profile": profile_name,
             "keyframes_count": len(keyframes),
             "spec_file": str(spec_file),
             "output_video": str(rendered_video_path) if rendered_video_path else None,
+            "warnings": warnings,
         }
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -282,7 +332,7 @@ def main() -> int:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path.home() / "Hannibal" / "03_Export",
+        default=Path.home() / "Hannibal" / "00_INBOX" / "Zu_Bearbeiten" / "Videos",
         help="Ausgabeordner",
     )
     parser.add_argument(
@@ -302,6 +352,11 @@ def main() -> int:
         action="store_true",
         help="Nur die focus_spec.json erzeugen, nicht rendern",
     )
+    parser.add_argument(
+        "--strict-safe-zone",
+        action="store_true",
+        help="Bricht bei Safe-Zone-Verletzung mit Fehler ab und rendert nicht",
+    )
     args = parser.parse_args()
 
     try:
@@ -311,6 +366,7 @@ def main() -> int:
             profile_name=args.profile,
             sample_interval=args.interval,
             render_video=not args.spec_only,
+            strict_safe_zone=args.strict_safe_zone,
         )
         print(json.dumps(result, indent=2))
         return 0

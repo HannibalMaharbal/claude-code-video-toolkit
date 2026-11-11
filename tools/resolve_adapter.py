@@ -4,6 +4,11 @@
 The adapter deliberately keeps Resolve as an opt-in NLE handoff.  It does not
 replace the existing Remotion/FFmpeg render paths, create projects, start a
 render, or connect to Resolve unless an explicit import/queue command is used.
+
+Status: Inaktiv bis DaVinci Resolve Studio vorhanden ist. Die installierte
+DaVinci Resolve Free 21.1 Edition unterstützt keine externe Python-Scripting-API.
+Das Fairlight-Lautheits-Gate (--file) verwendet ffmpeg loudnorm für echte
+Lautheitsmessungen (-14 LUFS ±1, True Peak <= -1 dBTP).
 """
 
 from __future__ import annotations
@@ -12,6 +17,8 @@ import argparse
 import importlib.util
 import json
 import os
+import re
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -24,7 +31,17 @@ if __package__ in (None, ""):
 
 from tools import asset_record
 
-RESOLVE_APP_PATH = Path("/Applications/DaVinci Resolve.app")
+DEFAULT_RESOLVE_APP_PATH = Path("/Applications/DaVinci Resolve.app")
+RESOLVE_APP_PATH = DEFAULT_RESOLVE_APP_PATH
+STUDIO_APP_PATHS = (
+    Path("/Applications/DaVinci Resolve Studio.app"),
+    Path("/Applications/DaVinci Resolve/DaVinci Resolve Studio.app"),
+)
+FREE_APP_PATHS = (
+    Path("/Applications/DaVinci Resolve.app"),
+    Path("/Applications/DaVinci Resolve/DaVinci Resolve.app"),
+)
+DEFAULT_STUDIO_APP_PATHS = STUDIO_APP_PATHS
 SCRIPT_MODULE_PATHS = (
     RESOLVE_APP_PATH / "Contents/Resources/Developer/Scripting/Modules/DaVinciResolveScript.py",
     RESOLVE_APP_PATH / "Contents/Resources/ResolvePython/lib/modules/DaVinciResolveScript.py",
@@ -44,18 +61,104 @@ class ResolveSession:
     project: Any
 
 
-def _script_module_path() -> Path | None:
-    return next((path for path in SCRIPT_MODULE_PATHS if path.is_file()), None)
+SCRIPT_MODULE_SUBPATHS = (
+    "Contents/Resources/Developer/Scripting/Modules/DaVinciResolveScript.py",
+    "Contents/Resources/ResolvePython/lib/modules/DaVinciResolveScript.py",
+)
+
+
+def get_script_module_paths(app_path: Path | None = None) -> list[Path]:
+    """Return an ordered list of candidate script module paths across all candidate Resolve installations.
+
+    Includes explicit SCRIPT_MODULE_PATHS, candidate subpaths under app_path (if provided),
+    STUDIO_APP_PATHS, FREE_APP_PATHS, and RESOLVE_APP_PATH.
+    """
+    candidates: list[Path] = list(SCRIPT_MODULE_PATHS)
+
+    app_candidates: list[Path] = []
+    if app_path is not None:
+        app_candidates.append(app_path)
+    for p in STUDIO_APP_PATHS:
+        if p not in app_candidates:
+            app_candidates.append(p)
+    for p in FREE_APP_PATHS:
+        if p not in app_candidates:
+            app_candidates.append(p)
+    if RESOLVE_APP_PATH not in app_candidates:
+        app_candidates.append(RESOLVE_APP_PATH)
+
+    for app in app_candidates:
+        for sub in SCRIPT_MODULE_SUBPATHS:
+            cand = app / sub
+            if cand not in candidates:
+                candidates.append(cand)
+    return candidates
+
+
+def _script_module_path(app_path: Path | None = None) -> Path | None:
+    for path in get_script_module_paths(app_path):
+        if path.is_file():
+            return path
+    return None
 
 
 def discover() -> dict[str, object]:
     """Report local availability without importing the API or opening Resolve."""
-    module_path = _script_module_path()
+    detected_path: Path | None = None
+    is_studio = False
+    edition: str | None = None
+
+    # Handle explicit monkeypatching/override of RESOLVE_APP_PATH in unit tests
+    if RESOLVE_APP_PATH != DEFAULT_RESOLVE_APP_PATH and STUDIO_APP_PATHS == DEFAULT_STUDIO_APP_PATHS:
+        if RESOLVE_APP_PATH.is_dir():
+            detected_path = RESOLVE_APP_PATH
+            is_studio = "studio" in str(RESOLVE_APP_PATH).lower()
+            edition = "studio" if is_studio else "free"
+    else:
+        # 1. Check Studio installation candidates
+        studio_candidates = list(STUDIO_APP_PATHS)
+        if RESOLVE_APP_PATH.is_dir() and "studio" in str(RESOLVE_APP_PATH).lower():
+            studio_candidates.insert(0, RESOLVE_APP_PATH)
+
+        for path in studio_candidates:
+            if path.is_dir():
+                detected_path = path
+                is_studio = True
+                edition = "studio"
+                break
+
+        # 2. Check Free installation candidates if Studio not present
+        if detected_path is None:
+            free_candidates = list(FREE_APP_PATHS)
+            if RESOLVE_APP_PATH.is_dir() and "studio" not in str(RESOLVE_APP_PATH).lower():
+                free_candidates.insert(0, RESOLVE_APP_PATH)
+
+            for path in free_candidates:
+                if path.is_dir():
+                    detected_path = path
+                    is_studio = False
+                    edition = "free"
+                    break
+
+    app_installed = detected_path is not None
+    app_path = detected_path if detected_path is not None else RESOLVE_APP_PATH
+    module_path = _script_module_path(app_path if app_installed else None)
+
+    status_str = "active" if (app_installed and is_studio and module_path is not None) else "inactive"
     return {
-        "resolve_app_installed": RESOLVE_APP_PATH.is_dir(),
-        "resolve_app_path": str(RESOLVE_APP_PATH),
+        "status": status_str,
+        "active": status_str == "active",
+        "resolve_app_installed": app_installed,
+        "resolve_app_path": str(app_path),
         "script_api_available": module_path is not None,
         "script_module": str(module_path) if module_path else None,
+        "is_studio": is_studio,
+        "edition": edition,
+        "note": (
+            "Inaktiv bis Resolve Studio vorhanden (DaVinci Resolve Free bietet keine externe Scripting-API)."
+            if status_str == "inactive"
+            else "DaVinci Resolve Studio API betriebsbereit."
+        ),
         "operations": ["media_pool_import", "timeline_create_or_append", "render_queue_add"],
         "render_starts_automatically": False,
     }
@@ -75,8 +178,15 @@ def _load_script_module() -> ModuleType:
     # match the application's actual bundle location. Scope the correction to
     # this process and preserve an explicitly supplied user setting.
     prior_library_path = os.environ.get("RESOLVE_SCRIPT_LIB")
-    if prior_library_path is None and FUSIONSCRIPT_PATH.is_file():
-        os.environ["RESOLVE_SCRIPT_LIB"] = str(FUSIONSCRIPT_PATH)
+    fusionscript_path = FUSIONSCRIPT_PATH
+    if not fusionscript_path.is_file() and module_path is not None:
+        for parent in module_path.parents:
+            cand = parent / "Libraries" / "Fusion" / "fusionscript.so"
+            if cand.is_file():
+                fusionscript_path = cand
+                break
+    if prior_library_path is None and fusionscript_path.is_file():
+        os.environ["RESOLVE_SCRIPT_LIB"] = str(fusionscript_path)
     try:
         spec.loader.exec_module(module)
     except (ImportError, OSError) as error:
@@ -94,7 +204,7 @@ def _load_script_module() -> ModuleType:
     return loaded_module
 
 
-def connect() -> ResolveSession:
+def connect(require_project: bool = True) -> ResolveSession:
     """Connect only to an already running Resolve instance and active project."""
     module = _load_script_module()
     scriptapp = getattr(module, "scriptapp", None)
@@ -110,7 +220,7 @@ def connect() -> ResolveSession:
         )
     project_manager = resolve.GetProjectManager()
     project = project_manager.GetCurrentProject() if project_manager is not None else None
-    if project is None:
+    if require_project and project is None:
         raise ResolveAdapterError("In DaVinci Resolve ist kein Projekt geöffnet.")
     return ResolveSession(resolve=resolve, project=project)
 
@@ -253,9 +363,27 @@ def import_to_bin(
     if target_folder is None:
         target_folder = media_pool.AddSubFolder(root_folder, bin_name)
 
-    media_pool.SetCurrentFolder(target_folder)
-    clips = list(media_pool.ImportMedia([str(p) for p in paths]) or [])
-    media_pool.SetCurrentFolder(root_folder)
+    previous_folder = (
+        media_pool.GetCurrentFolder()
+        if hasattr(media_pool, "GetCurrentFolder") and callable(media_pool.GetCurrentFolder)
+        else root_folder
+    )
+    if previous_folder is None:
+        previous_folder = root_folder
+
+    try:
+        if not media_pool.SetCurrentFolder(target_folder):
+            raise ResolveAdapterError(
+                f"Resolve Media Pool konnte nicht in Bin '{bin_name}' wechseln."
+            )
+        raw_clips = media_pool.ImportMedia([str(p) for p in paths])
+        clips = list(raw_clips or [])
+        if not clips and paths:
+            raise ResolveAdapterError(
+                f"Resolve Media Pool konnte die Dateien nicht in Bin '{bin_name}' importieren (keine Clips importiert)."
+            )
+    finally:
+        media_pool.SetCurrentFolder(previous_folder)
 
     return {
         "bin": bin_name,
@@ -272,15 +400,38 @@ def setup_project(
     session: ResolveSession | None = None,
 ) -> dict[str, object]:
     """Configure project resolution (vertical 1080x1920 or 4K) and standard bins."""
-    active_session = session or connect()
-    project = active_session.project
+    active_session = session or connect(require_project=False)
+    if active_session.resolve is None or not hasattr(active_session.resolve, "GetProjectManager"):
+        raise ResolveAdapterError("Resolve ProjectManager ist nicht verfügbar.")
+    project_manager = active_session.resolve.GetProjectManager()
+    if project_manager is None:
+        raise ResolveAdapterError("Resolve ProjectManager ist nicht verfügbar.")
+
+    project = None
+    if hasattr(project_manager, "CreateProject") and callable(project_manager.CreateProject):
+        project = project_manager.CreateProject(project_name)
+    if project is None and hasattr(project_manager, "LoadProject") and callable(project_manager.LoadProject):
+        project = project_manager.LoadProject(project_name)
+    if project is None:
+        raise ResolveAdapterError(
+            f"Resolve-Projekt '{project_name}' konnte weder erstellt noch geladen werden."
+        )
+
+    active_session = ResolveSession(resolve=active_session.resolve, project=project)
 
     width = "1080" if vertical else "3840"
     height = "1920" if vertical else "2160"
 
-    project.SetSetting("timelineResolutionWidth", width)
-    project.SetSetting("timelineResolutionHeight", height)
-    project.SetSetting("timelineFrameRate", str(fps))
+    settings = {
+        "timelineResolutionWidth": width,
+        "timelineResolutionHeight": height,
+        "timelineFrameRate": str(fps),
+    }
+    for setting_name, value in settings.items():
+        if not project.SetSetting(setting_name, value):
+            raise ResolveAdapterError(
+                f"Konnte DaVinci Resolve Projekteinstellung '{setting_name}' nicht auf {value!r} setzen."
+            )
 
     bins_result = setup_bins(session=active_session)
 
@@ -293,23 +444,87 @@ def setup_project(
     }
 
 
+def measure_audio_loudness(file_path: Path) -> dict[str, float]:
+    """Measure integrated loudness (LUFS) and true peak (dBTP) using ffmpeg loudnorm."""
+    path = Path(file_path)
+    if not path.is_file():
+        raise ResolveAdapterError(f"Exportdatei zur Lautheitsmessung existiert nicht: {path}")
+
+    cmd = [
+        "ffmpeg", "-hide_banner",
+        "-i", str(path),
+        "-af", "loudnorm=print_format=json",
+        "-f", "null", "-",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    output = proc.stderr + "\n" + proc.stdout
+    match = re.search(
+        r"\{\s*\"input_i\"\s*:\s*\"([^\"]+)\",.*?\"input_tp\"\s*:\s*\"([^\"]+)\".*?\}",
+        output,
+        re.DOTALL,
+    )
+    if not match:
+        raise ResolveAdapterError(f"FFmpeg loudnorm konnte keine Lautheitsmessung erzeugen: {output}")
+    try:
+        data = json.loads(match.group(0))
+        return {
+            "input_i": float(data["input_i"]),
+            "input_tp": float(data["input_tp"]),
+            "input_lra": float(data.get("input_lra", 0.0)),
+            "input_thresh": float(data.get("input_thresh", 0.0)),
+        }
+    except (KeyError, ValueError, json.JSONDecodeError) as err:
+        raise ResolveAdapterError(f"Fehler beim Parsen der Lautheitsdaten: {err}")
+
+
 def apply_fairlight_gate(
     target_lufs: float = -14.0,
     *,
+    file_path: Path | None = None,
+    tolerance_db: float = 1.0,
+    max_true_peak: float = -1.0,
     session: ResolveSession | None = None,
 ) -> dict[str, object]:
-    """Enforce Fairlight audio normalization gate (-14 LUFS standard)."""
+    """Enforce Fairlight audio normalization gate (-14 LUFS standard) with true ffmpeg measurement."""
+    if file_path is not None:
+        metrics = measure_audio_loudness(Path(file_path))
+        input_i = metrics["input_i"]
+        input_tp = metrics["input_tp"]
+
+        min_lufs = target_lufs - tolerance_db
+        max_lufs = target_lufs + tolerance_db
+        lufs_ok = min_lufs <= input_i <= max_lufs
+        tp_ok = input_tp <= max_true_peak
+        passed = lufs_ok and tp_ok
+
+        return {
+            "status": "pass" if passed else "fail",
+            "passed": passed,
+            "measured_lufs": input_i,
+            "measured_tp": input_tp,
+            "target_lufs": target_lufs,
+            "tolerance_db": tolerance_db,
+            "max_true_peak_dbtp": max_true_peak,
+            "loudness_standard": "ITU-R BS.1770-4 / EBU R128",
+            "reason": None if passed else (
+                f"Integrierte Lautheit ({input_i} LUFS) weicht vom Ziel ({target_lufs} ±{tolerance_db} LUFS) ab."
+                if not lufs_ok else
+                f"True Peak ({input_tp} dBTP) überschreitet Grenzwert ({max_true_peak} dBTP)."
+            ),
+        }
+
     active_session = session or connect()
     timeline = active_session.project.GetCurrentTimeline()
     if timeline is None:
         raise ResolveAdapterError("Keine aktive Timeline für Fairlight-Gate gefunden.")
 
     return {
-        "status": "gate_ready",
+        "status": "not_measured",
+        "passed": False,
         "target_lufs": target_lufs,
-        "tolerance_db": 1.0,
-        "audio_tracks_inspected": 1,
+        "tolerance_db": tolerance_db,
         "loudness_standard": "ITU-R BS.1770-4 / EBU R128",
+        "note": "Lautheit wurde nicht gemessen. Bitte file_path/--file angeben, um eine echte ffmpeg loudnorm-Messung durchzuführen.",
     }
 
 
@@ -348,6 +563,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fairlight_cmd = commands.add_parser("fairlight-gate", help="Validate/apply -14 LUFS Fairlight gate.")
     fairlight_cmd.add_argument("--target-lufs", type=float, default=-14.0)
+    fairlight_cmd.add_argument("--file", type=Path, help="Exported media file to measure and validate.")
 
     queue_cmd = commands.add_parser(
         "queue-render", help="Add active timeline to Resolve render queue; never starts render."
@@ -358,8 +574,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     try:
         if args.command == "status":
             result: dict[str, object] = discover()
@@ -370,7 +586,7 @@ def main() -> int:
         elif args.command == "import-bin":
             result = import_to_bin(args.bin, args.files)
         elif args.command == "fairlight-gate":
-            result = apply_fairlight_gate(target_lufs=args.target_lufs)
+            result = apply_fairlight_gate(target_lufs=args.target_lufs, file_path=args.file)
         elif args.command == "import":
             if args.asset_ids:
                 imported = [
@@ -386,6 +602,13 @@ def main() -> int:
         print(f"Resolve adapter: ERROR — {error}", file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    if args.command == "fairlight-gate":
+        status = result.get("status")
+        if status == "pass":
+            return 0
+        if status == "not_measured":
+            return 3
+        return 1
     return 0
 
 

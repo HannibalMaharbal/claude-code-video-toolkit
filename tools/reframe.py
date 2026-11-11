@@ -58,28 +58,110 @@ def parse_focus_spec(path: Path) -> list[dict[str, Any]]:
     return parsed
 
 
+_UNSET = object()
+
+
+def _resolve_cut_thresholds(
+    cut_threshold: float | tuple[float | None, float | None] | None = None,
+    cut_threshold_y: float | None | object = _UNSET,
+) -> tuple[float | None, float | None]:
+    if cut_threshold_y is _UNSET:
+        if isinstance(cut_threshold, (tuple, list)):
+            th_x = float(cut_threshold[0]) if cut_threshold[0] is not None else None
+            th_y = float(cut_threshold[1]) if cut_threshold[1] is not None else None
+            return th_x, th_y
+        if cut_threshold is not None:
+            val = float(cut_threshold)
+            return val, val
+        return None, None
+
+    th_x = None
+    if isinstance(cut_threshold, (tuple, list)):
+        th_x = float(cut_threshold[0]) if cut_threshold[0] is not None else None
+    elif cut_threshold is not None:
+        th_x = float(cut_threshold)
+    th_y = float(cut_threshold_y) if cut_threshold_y is not None else None
+    return th_x, th_y
+
+
+def _is_cut_jump(
+    cx1: float,
+    cy1: float,
+    cx2: float,
+    cy2: float,
+    cut_threshold: float | tuple[float | None, float | None] | None = None,
+    cut_threshold_y: float | None | object = _UNSET,
+) -> bool:
+    th_x, th_y = _resolve_cut_thresholds(cut_threshold, cut_threshold_y)
+    cut_x = th_x is not None and abs(cx2 - cx1) > th_x
+    cut_y = th_y is not None and abs(cy2 - cy1) > th_y
+    return cut_x or cut_y
+
+
 def smooth_keyframes(
-    keyframes: list[dict[str, Any]], *, alpha: float = 0.5
+    keyframes: list[dict[str, Any]],
+    *,
+    alpha: float = 0.5,
+    cut_threshold: float | tuple[float | None, float | None] | None = None,
+    cut_threshold_y: float | None | object = _UNSET,
 ) -> list[dict[str, Any]]:
-    """Exponential smoothing over the keyframe sequence to remove jitter between cuts."""
+    """Exponential smoothing over the keyframe sequence to remove jitter between cuts.
+
+    If cut_threshold / cut_threshold_y is provided, jumps greater than the threshold
+    along either axis are treated as scene cuts: smoothing is reset without blending
+    across the cut boundary.
+    """
     if not keyframes:
         return []
     smoothed: list[dict[str, Any]] = [dict(keyframes[0])]
     for keyframe in keyframes[1:]:
         previous = smoothed[-1]
-        entry: dict[str, Any] = {
-            "t": keyframe["t"],
-            "cx": alpha * keyframe["cx"] + (1 - alpha) * previous["cx"],
-            "cy": alpha * keyframe["cy"] + (1 - alpha) * previous["cy"],
-        }
+        if _is_cut_jump(
+            float(previous["cx"]),
+            float(previous["cy"]),
+            float(keyframe["cx"]),
+            float(keyframe["cy"]),
+            cut_threshold,
+            cut_threshold_y,
+        ):
+            entry: dict[str, Any] = {
+                "t": keyframe["t"],
+                "cx": keyframe["cx"],
+                "cy": keyframe["cy"],
+            }
+        else:
+            entry = {
+                "t": keyframe["t"],
+                "cx": alpha * keyframe["cx"] + (1 - alpha) * previous["cx"],
+                "cy": alpha * keyframe["cy"] + (1 - alpha) * previous["cy"],
+            }
         if "box" in keyframe:
             entry["box"] = keyframe["box"]
         smoothed.append(entry)
     return smoothed
 
 
-def focus_at(keyframes: list[dict[str, Any]], t: float) -> tuple[float, float]:
-    """Piecewise-linear interpolation of the focus center at time t."""
+def focus_at(
+    keyframes: list[dict[str, Any]],
+    t: float,
+    *,
+    cut_threshold: float | tuple[float | None, float | None] | None = None,
+    cut_threshold_y: float | None | object = _UNSET,
+) -> tuple[float, float]:
+    """Piecewise-linear interpolation of the focus center at time t.
+
+    If cut_threshold / cut_threshold_y is provided, jumps greater than the threshold
+    between adjacent keyframes are treated as cuts (step function): before the midpoint
+    between keyframes ((start.t + end.t) / 2) the focus stays at the start keyframe,
+    and from the midpoint onward it takes the end keyframe.
+
+    Cut vs. rapid continuous motion tradeoff:
+    At coarse sample intervals (e.g. 1.0s), an abrupt jump cannot be distinguished from
+    rapid continuous motion. Holding prior focus until the midpoint and taking the new
+    focus from the midpoint halves tracking error in both scenarios compared to holding
+    until the next keyframe. For fast-moving continuous subjects, recommend a smaller
+    sampling interval (e.g. --interval 0.25) to avoid stepping artifacts.
+    """
     if len(keyframes) == 1:
         return keyframes[0]["cx"], keyframes[0]["cy"]
     if t <= keyframes[0]["t"]:
@@ -88,6 +170,18 @@ def focus_at(keyframes: list[dict[str, Any]], t: float) -> tuple[float, float]:
         return keyframes[-1]["cx"], keyframes[-1]["cy"]
     for start, end in zip(keyframes, keyframes[1:]):
         if start["t"] <= t <= end["t"]:
+            if _is_cut_jump(
+                float(start["cx"]),
+                float(start["cy"]),
+                float(end["cx"]),
+                float(end["cy"]),
+                cut_threshold,
+                cut_threshold_y,
+            ):
+                midpoint = (float(start["t"]) + float(end["t"])) / 2.0
+                if t < midpoint:
+                    return start["cx"], start["cy"]
+                return end["cx"], end["cy"]
             span = end["t"] - start["t"]
             ratio = 0.0 if span <= 0 else (t - start["t"]) / span
             return (
@@ -154,6 +248,36 @@ def _run(command: list[str], *, timeout: int = 120) -> None:
         raise ReframeError(f"ffmpeg lief in ein Timeout: {command[0]}") from error
 
 
+def compute_segment_bounds(
+    keyframes: list[dict[str, Any]],
+    duration: float,
+    cut_threshold: float | tuple[float | None, float | None] | None = None,
+    cut_threshold_y: float | None | object = _UNSET,
+) -> list[float]:
+    """Compute segment boundaries for rendering, splitting at keyframes and cut midpoints.
+
+    When a cut jump is detected between adjacent keyframes, the switch occurs at their midpoint.
+    Adding the midpoint to the segment boundaries ensures every segment lies entirely before
+    or after the switch, avoiding premature or delayed framing changes.
+    """
+    interior: set[float] = {
+        float(kf["t"]) for kf in keyframes if 0.0 < float(kf["t"]) < duration
+    }
+    for start, end in zip(keyframes, keyframes[1:]):
+        if _is_cut_jump(
+            float(start["cx"]),
+            float(start["cy"]),
+            float(end["cx"]),
+            float(end["cy"]),
+            cut_threshold,
+            cut_threshold_y,
+        ):
+            midpoint = (float(start["t"]) + float(end["t"])) / 2.0
+            if 0.0 < midpoint < duration:
+                interior.add(midpoint)
+    return sorted({0.0, *interior, max(0.0, duration)})
+
+
 def _segment_bounds(keyframe_times: list[float], duration: float) -> list[float]:
     interior = {t for t in keyframe_times if 0 < t < duration}
     return sorted({0.0, *interior, duration})
@@ -167,10 +291,25 @@ def render(
     focus_spec_path: Path | None = None,
     allow_center_crop: bool = False,
     allow_center_crop_reason: str | None = None,
+    allow_safe_zone_violation: bool = False,
 ) -> dict[str, Any]:
     """Render a profile-shaped crop that follows the focus spec. Never a silent center-crop."""
     profile = platform_profiles.get_profile(profile_name)
     target_w, target_h = profile["resolution"]["width"], profile["resolution"]["height"]
+    metadata = probe_media(master_path)
+    source_w, source_h = int(cast(int, metadata["width"])), int(cast(int, metadata["height"]))
+    duration = float(cast(float, metadata["duration"]))
+
+    target_ratio = target_w / target_h
+    source_ratio = source_w / source_h
+    if source_ratio > target_ratio:
+        crop_w_rel = min(1.0, target_ratio / source_ratio)
+        crop_h_rel = 1.0
+    else:
+        crop_w_rel = 1.0
+        crop_h_rel = min(1.0, source_ratio / target_ratio)
+    half_crop_w = (crop_w_rel / 2.0) if crop_w_rel < 1.0 else None
+    half_crop_h = (crop_h_rel / 2.0) if crop_h_rel < 1.0 else None
 
     warnings: list[str] = []
     if focus_spec_path is None:
@@ -185,27 +324,39 @@ def render(
         keyframes = [{"t": 0.0, "cx": 0.5, "cy": 0.5}]
         warnings.append(f"Center-Crop ohne Fokus-Spec erlaubt: {allow_center_crop_reason}")
     else:
-        keyframes = smooth_keyframes(parse_focus_spec(focus_spec_path))
-
-    metadata = probe_media(master_path)
-    source_w, source_h = int(cast(int, metadata["width"])), int(cast(int, metadata["height"]))
-    duration = float(cast(float, metadata["duration"]))
+        keyframes = smooth_keyframes(
+            parse_focus_spec(focus_spec_path),
+            cut_threshold=half_crop_w,
+            cut_threshold_y=half_crop_h,
+        )
 
     if focus_spec_path is not None:
         safe_zone_warnings = check_safe_zone(keyframes, profile, source_w, source_h)
         if safe_zone_warnings:
-            raise ReframeError(
-                "Fokus verlässt die Safe-Zone (needs_human): " + "; ".join(safe_zone_warnings)
-            )
+            if not allow_safe_zone_violation:
+                raise ReframeError(
+                    "Fokus verlässt die Safe-Zone (needs_human): " + "; ".join(safe_zone_warnings)
+                )
+            warnings.extend(safe_zone_warnings)
 
-    bounds = _segment_bounds([keyframe["t"] for keyframe in keyframes], duration)
+    bounds = compute_segment_bounds(
+        keyframes,
+        duration,
+        cut_threshold=half_crop_w,
+        cut_threshold_y=half_crop_h,
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="reframe-") as work_dir:
         work = Path(work_dir)
         segment_paths: list[Path] = []
         for index, (start, end) in enumerate(zip(bounds, bounds[1:])):
             midpoint = (start + end) / 2
-            cx, cy = focus_at(keyframes, midpoint)
+            cx, cy = focus_at(
+                keyframes,
+                midpoint,
+                cut_threshold=half_crop_w,
+                cut_threshold_y=half_crop_h,
+            )
             x, y, crop_w, crop_h = compute_crop_window(
                 source_w, source_h, target_w, target_h, cx, cy
             )
@@ -265,6 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("output", type=Path)
     parser.add_argument("--focus", type=Path, help="Focus spec JSON with keyframes.")
     parser.add_argument("--allow-center-crop", action="store_true")
+    parser.add_argument("--allow-safe-zone-violation", action="store_true")
     parser.add_argument("--reason", help="Required justification with --allow-center-crop.")
     parser.add_argument("--master-asset-id", help="Register the output as a VARIANT of this id.")
     return parser
@@ -280,6 +432,7 @@ def main() -> int:
             focus_spec_path=args.focus,
             allow_center_crop=args.allow_center_crop,
             allow_center_crop_reason=args.reason,
+            allow_safe_zone_violation=args.allow_safe_zone_violation,
         )
         if args.master_asset_id:
             record = register_reframe_output(

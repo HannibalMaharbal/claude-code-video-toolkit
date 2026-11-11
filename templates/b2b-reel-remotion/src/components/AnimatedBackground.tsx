@@ -5,7 +5,7 @@ export const AnimatedBackground: React.FC = () => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
 
-  // Seamless Loop Engineering: Full 2*PI oscillation guarantees frame 0 and final frame match
+  // Hintergrund loopt: 2*PI Oszillation über die Dauer (Hintergrund-Lichteffekt loopt; Text/CTA und Gesamtvideo loopen nicht)
   const loopCycle = (frame / Math.max(1, durationInFrames)) * Math.PI * 2;
   const glowShift1 = Math.sin(loopCycle) * 30;
   const glowShift2 = Math.cos(loopCycle) * 40 - 40;

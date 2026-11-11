@@ -6,25 +6,73 @@ interface WordCaptionsProps {
   captions?: WordCaption[];
 }
 
-export const WordCaptions: React.FC<WordCaptionsProps> = ({ captions }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+export interface CaptionWindow {
+  visibleWords: WordCaption[];
+  startIdx: number;
+}
 
+export function getActiveCaptionWindow(
+  captions?: WordCaption[],
+  timeMs: number = 0
+): CaptionWindow | null {
   if (!captions || captions.length === 0) {
     return null;
   }
 
-  const currentMs = (frame / fps) * 1000;
+  // Before speech starts:
+  if (timeMs < captions[0].startMs) {
+    return null;
+  }
 
-  // Window of 5-6 words around current time
+  // After the last word ends: ausblenden
+  if (timeMs > captions[captions.length - 1].endMs) {
+    return null;
+  }
+
+  // Find currently spoken word
   const currentIndex = captions.findIndex(
-    (c) => currentMs >= c.startMs && currentMs <= c.endMs
+    (c) => timeMs >= c.startMs && timeMs <= c.endMs
   );
 
-  const activeIdx = currentIndex !== -1 ? currentIndex : 0;
+  let activeIdx: number;
+  if (currentIndex !== -1) {
+    activeIdx = currentIndex;
+  } else {
+    // In speech pauses between words: hold the last spoken word window
+    let lastSpokenIdx = -1;
+    for (let i = 0; i < captions.length; i++) {
+      if (captions[i].endMs <= timeMs) {
+        lastSpokenIdx = i;
+      } else {
+        break;
+      }
+    }
+    if (lastSpokenIdx === -1) {
+      return null;
+    }
+    activeIdx = lastSpokenIdx;
+  }
+
   const startIdx = Math.max(0, activeIdx - 2);
   const endIdx = Math.min(captions.length, activeIdx + 4);
-  const visibleWords = captions.slice(startIdx, endIdx);
+  return {
+    visibleWords: captions.slice(startIdx, endIdx),
+    startIdx,
+  };
+}
+
+export const WordCaptions: React.FC<WordCaptionsProps> = ({ captions }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const currentMs = (frame / fps) * 1000;
+  const activeWindow = getActiveCaptionWindow(captions, currentMs);
+
+  if (!activeWindow) {
+    return null;
+  }
+
+  const { visibleWords, startIdx } = activeWindow;
 
   return (
     <div

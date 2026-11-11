@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Local MCP server bridge for DaVinci Resolve Studio API.
 
+Status: Inaktiv bis DaVinci Resolve Studio vorhanden ist (Resolve Free 21.1
+bietet keine externe Python-Scripting-API). Das Fairlight-Lautheits-Gate
+verwendet ffmpeg loudnorm für echte Messungen (-14 LUFS ±1, True Peak <= -1 dBTP).
+
 Exposes standard MCP tools for Claude Code, Codex, and Antigravity:
   - resolve_status: Report local DaVinci Resolve & Scripting API health
   - resolve_setup_project: Set resolution (1080x1920 9:16 or 4K) & initialize standard bins
@@ -71,10 +75,11 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "resolve_fairlight_gate",
-        "description": "Inspect and verify the -14 LUFS Fairlight broadcast/social loudness gate.",
+        "description": "Inspect and verify the -14 LUFS Fairlight broadcast/social loudness gate using ffmpeg loudnorm. Note: pass 'file' for real audio measurement; timeline inspection alone returns status 'not_measured'.",
         "inputSchema": {
             "type": "object",
             "properties": {
+                "file": {"type": "string", "description": "Optional exported audio/video file path to measure and validate."},
                 "target_lufs": {"type": "number", "default": -14.0, "description": "Target LUFS value."},
             },
         },
@@ -100,8 +105,11 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "resolve_status":
             return resolve_adapter.discover()
         elif name == "resolve_setup_project":
+            proj_name = arguments.get("name") or arguments.get("project_name")
+            if not proj_name:
+                raise KeyError("name")
             return resolve_adapter.setup_project(
-                arguments["name"],
+                proj_name,
                 vertical=arguments.get("vertical", True),
                 fps=arguments.get("fps", 30.0),
             )
@@ -114,7 +122,11 @@ def handle_tool_call(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 return resolve_adapter.import_to_bin(target_bin, paths)
             return resolve_adapter.import_media(paths, timeline_name=arguments.get("timeline_name"))
         elif name == "resolve_fairlight_gate":
-            return resolve_adapter.apply_fairlight_gate(arguments.get("target_lufs", -14.0))
+            file_path = Path(arguments["file"]) if arguments.get("file") else None
+            return resolve_adapter.apply_fairlight_gate(
+                target_lufs=arguments.get("target_lufs", -14.0),
+                file_path=file_path,
+            )
         elif name == "resolve_queue_render":
             return resolve_adapter.queue_render(
                 Path(arguments["target_dir"]),

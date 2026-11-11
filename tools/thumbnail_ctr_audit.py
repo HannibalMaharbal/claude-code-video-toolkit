@@ -9,7 +9,7 @@ Audits thumbnail viability on mobile devices (where 80%+ of YouTube clicks occur
 
 Usage:
     uv run tools/thumbnail_ctr_audit.py --image path/to/thumb.png
-    uv run tools/thumbnail_ctr_audit.py --image path/to/thumb.png --output-dir ~/Hannibal/03_Export/
+    uv run tools/thumbnail_ctr_audit.py --image path/to/thumb.png --output-dir ~/Hannibal/00_INBOX/Zu_Bearbeiten/Bilder/
 """
 
 from __future__ import annotations
@@ -161,7 +161,7 @@ def generate_diagnostic_sheet(image_path: Path, output_path: Path) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="YouTube Thumbnail Mobile-CTR Simulator")
     parser.add_argument("--image", "-i", type=Path, required=True, help="Input thumbnail file.")
-    parser.add_argument("--output-dir", "-o", type=Path, default=Path("~/Hannibal/03_Export").expanduser())
+    parser.add_argument("--output-dir", "-o", type=Path, default=Path("~/Hannibal/00_INBOX/Zu_Bearbeiten/Bilder").expanduser())
     parser.add_argument("--sheet", action="store_true", default=True, help="Generate visual diagnostic sheet.")
     parser.add_argument("--json", action="store_true", help="Print json output only.")
     args = parser.parse_args()

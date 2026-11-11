@@ -1,20 +1,21 @@
 {
+  "_hinweis": "BEISPIELDATEN – alle Zahlen sind Platzhalter und müssen vor Veröffentlichung durch echte, belegte Werte ersetzt werden.",
   "brandName": "LICBARSKA",
   "brandTagline": "Consulting & Immobilien",
   "badgeText": "B2B ANALYSE 2026",
   "hookHeadline": "3 KARDINALFEHLER BEIM MEHRFAMILIENHAUS-VERKAUF",
-  "hookSubline": "Warum Eigentümer aktuell bis zu 22% Rendite verschenken",
+  "hookSubline": "Warum Eigentümer aktuell bis zu [XX %] Rendite verschenken",
   "statHighlight": {
-    "value": "-22%",
+    "value": "-[XX] %",
     "label": "Wertverlust durch falsche Vermarktung",
-    "subtitle": "Basierend auf 140+ Transaktionen im DACH-Raum",
+    "subtitle": "[Beispielwert – vor Veröffentlichung durch echte, belegte Zahl ersetzen]",
     "trend": "down"
   },
   "keyPoints": [
     {
       "index": 1,
       "title": "Verkauf ohne Sanierungsfahrplan",
-      "detail": "Käufer preisen unklare ESG-Risiken mit bis zu 15% Abschlag ein."
+      "detail": "Käufer preisen unklare ESG-Risiken mit bis zu [XX %] Abschlag ein."
     },
     {
       "index": 2,

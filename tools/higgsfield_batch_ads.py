@@ -26,7 +26,9 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,7 +41,8 @@ if __package__ in (None, ""):
 
 from tools import higgsfield_video
 
-EXPORT_ROOT = Path(os.path.expanduser("~/Hannibal/03_Export/higgsfield"))
+EXPORT_ROOT = Path(os.path.expanduser("~/Hannibal/00_INBOX/Zu_Bearbeiten/Videos/higgsfield"))
+CAMPAIGN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 DEFAULT_ANGLES = [
     {
@@ -71,11 +74,12 @@ class AdItem:
     hook: str
     model: str
     prompt: str
-    estimated_credits: float
+    estimated_credits: float | None
     output_filename: str
     status: str = "pending"
     job_id: str | None = None
     local_path: str | None = None
+    error: str | None = None
 
 
 def generate_ad_plan(
@@ -88,13 +92,25 @@ def generate_ad_plan(
         angle = DEFAULT_ANGLES[i % len(DEFAULT_ANGLES)]
         chosen_model = models[i % len(models)]
         composed_prompt = f"{angle['prompt_template']} Context: {product}."
+
+        est_credits: float | None = None
+        if hasattr(higgsfield_video, "estimate_cost"):
+            try:
+                cost_res = higgsfield_video.estimate_cost(chosen_model, prompt=composed_prompt)
+                if isinstance(cost_res, dict):
+                    c = cost_res.get("credits")
+                    if isinstance(c, (int, float)) and math.isfinite(c) and c >= 0:
+                        est_credits = float(c)
+            except Exception:
+                est_credits = None
+
         items.append(
             AdItem(
                 index=i + 1,
                 hook=angle["hook"],
                 model=chosen_model,
                 prompt=composed_prompt,
-                estimated_credits=3.0,  # Standard baseline estimate for seedance_2_0_mini
+                estimated_credits=est_credits,
                 output_filename=f"ad_{i+1:02d}_{chosen_model}_{angle['hook'].lower().replace('/', '_')}.mp4",
             )
         )
@@ -109,13 +125,58 @@ def run_batch(
     max_credits: float,
     confirm: bool = False,
 ) -> dict[str, Any]:
+    if (
+        not isinstance(max_credits, (int, float))
+        or isinstance(max_credits, bool)
+        or not math.isfinite(max_credits)
+        or max_credits <= 0
+    ):
+        raise ValueError(
+            f"Ungültiges Limit --max-credits: {max_credits!r}. Muss eine endliche Zahl > 0 sein."
+        )
+
+    if not isinstance(campaign, str) or not CAMPAIGN_NAME_RE.fullmatch(campaign):
+        raise ValueError(
+            f"Ungültiger Kampagnenname: {campaign!r}. Erlaubt sind nur [A-Za-z0-9_-] mit 1–64 Zeichen."
+        )
+
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    campaign_dir = EXPORT_ROOT / f"{campaign}_{timestamp}"
+    target_root = EXPORT_ROOT.resolve()
+    campaign_dir = (EXPORT_ROOT / f"{campaign}_{timestamp}").resolve()
+    if campaign_dir == target_root or target_root not in campaign_dir.parents:
+        raise ValueError(
+            f"Zielpfad {campaign_dir} bricht aus dem Export-Verzeichnis {target_root} aus."
+        )
     plan = generate_ad_plan(product, num_ads, models)
 
+    unknown_costs = any(
+        item.estimated_credits is None
+        or not isinstance(item.estimated_credits, (int, float))
+        or isinstance(item.estimated_credits, bool)
+        or not math.isfinite(item.estimated_credits)
+        or item.estimated_credits < 0
+        for item in plan
+    )
+    total_estimated = sum(
+        item.estimated_credits
+        for item in plan
+        if isinstance(item.estimated_credits, (int, float))
+        and not isinstance(item.estimated_credits, bool)
+        and math.isfinite(item.estimated_credits)
+        and item.estimated_credits >= 0
+    )
+    if not math.isfinite(total_estimated) or total_estimated < 0:
+        unknown_costs = True
+
+    # Fail-closed check: if prices cannot be determined, confirm is blocked
+    if confirm and unknown_costs:
+        raise RuntimeError(
+            "Fail-closed: Mindestens ein Modellpreis ist unbekannt oder konnte nicht ermittelt werden. "
+            "Ohne verifizierten Preis ist --confirm gesperrt."
+        )
+
     # Cost gating check
-    total_estimated = sum(item.estimated_credits for item in plan)
-    if total_estimated > max_credits:
+    if not unknown_costs and total_estimated > max_credits:
         raise RuntimeError(
             f"Budget Gate Blocked: Geschätzte Kosten ({total_estimated} Credits) übersteigen "
             f"das autorisierte Limit (--max-credits {max_credits})."
@@ -127,11 +188,12 @@ def run_batch(
         "timestamp": timestamp,
         "num_ads": num_ads,
         "models": models,
-        "total_estimated_credits": total_estimated,
+        "total_estimated_credits": total_estimated if not unknown_costs else None,
         "max_credits_authorized": max_credits,
         "confirm_flag_set": confirm,
         "target_directory": str(campaign_dir),
         "items": [asdict(item) for item in plan],
+        "failed_count": 0,
     }
 
     if not confirm:
@@ -142,7 +204,8 @@ def run_batch(
         print(f"Produkt:                {product}")
         print(f"Geplante Ads:           {num_ads}")
         print(f"Eingesetzte Modelle:    {', '.join(models)}")
-        print(f"Geschätzte Credits:     {total_estimated} (Limit: {max_credits})")
+        cost_str = f"{total_estimated}" if not unknown_costs else "unbekannt"
+        print(f"Geschätzte Credits:     {cost_str} (Limit: {max_credits})")
         print(f"Zielverzeichnis:        {campaign_dir}")
         print("-" * 70)
         for it in plan:
@@ -153,29 +216,85 @@ def run_batch(
         return result_summary
 
     # Production run
+    def _valid_number(val: Any) -> bool:
+        return isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val) and val >= 0
+
+    try:
+        balance_info = higgsfield_video.get_balance()
+        balance_credits = balance_info.get("credits") if isinstance(balance_info, dict) else None
+    except Exception as exc:
+        raise RuntimeError(f"Guthabenprüfung fehlgeschlagen ({exc}); kein Auftrag gestartet.") from exc
+
+    if not _valid_number(balance_credits) or not _valid_number(total_estimated) or balance_credits < total_estimated:
+        raise RuntimeError(
+            f"Kosten oder Guthaben unbekannt oder unzureichend: Benötigt {total_estimated} Credits, "
+            f"verfügbares Guthaben: {balance_credits}; kein Auftrag gestartet."
+        )
+
     campaign_dir.mkdir(parents=True, exist_ok=True)
     print(f"[*] Starte Kampagnen-Generierung in: {campaign_dir}")
 
-    for it in plan:
+    spent_credits = 0.0
+    for idx, it in enumerate(plan):
+        # Unmittelbar vor JEDEM create_video() erneut estimate_cost() aufrufen
+        new_price: float | None = None
+        try:
+            latest_cost_info = higgsfield_video.estimate_cost(it.model, prompt=it.prompt)
+            if isinstance(latest_cost_info, dict):
+                c = latest_cost_info.get("credits")
+                if isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) and c >= 0:
+                    new_price = float(c)
+        except Exception:
+            new_price = None
+
+        if new_price is None or (spent_credits + new_price > max_credits):
+            abort_msg = (
+                f"Budget überschritten oder Preis nicht finit: verbraucht={spent_credits}, "
+                f"neuer_preis={new_price}, limit={max_credits}"
+            )
+            print(f"[!] {abort_msg}. Breche diesen und alle weiteren Aufträge ab.", file=sys.stderr)
+            for rem in plan[idx:]:
+                rem.status = "abgebrochen: Budget"
+                rem.error = abort_msg
+            break
+
+        it.estimated_credits = new_price
+        spent_credits += new_price
+
         out_file = campaign_dir / it.output_filename
         print(f"[*] Generiere Ad #{it.index} ({it.hook}) mit {it.model}...")
         try:
-            # Delegate to existing higgsfield_video wrapper
-            job_res = higgsfield_video.generate_video(
+            # Delegate to existing higgsfield_video wrapper: create_video
+            job_res = higgsfield_video.create_video(
                 model=it.model,
                 prompt=it.prompt,
                 output_path=str(out_file),
-                confirm=True,
-                max_credits=it.estimated_credits * 1.5,
             )
-            it.status = "completed"
-            it.job_id = str(job_res.get("job_id") if isinstance(job_res, dict) else "ok")
-            it.local_path = str(out_file)
+            if isinstance(job_res, dict) and job_res.get("success", False):
+                it.status = "ok"
+                it.job_id = str(job_res.get("job_id") if job_res.get("job_id") else "ok")
+                it.local_path = str(out_file)
+                it.error = None
+            else:
+                err_msg = job_res.get("error", "Unbekannter Fehler") if isinstance(job_res, dict) else str(job_res)
+                it.status = "fehler"
+                it.error = err_msg
+                if isinstance(job_res, dict) and job_res.get("job") and isinstance(job_res["job"], dict):
+                    it.job_id = str(job_res["job"].get("id"))
+                elif isinstance(job_res, dict) and job_res.get("job_id"):
+                    it.job_id = str(job_res.get("job_id"))
+                print(f"[!] Fehler bei Ad #{it.index}: {err_msg}", file=sys.stderr)
         except Exception as exc:
-            it.status = f"failed: {exc}"
+            it.status = "fehler"
+            it.error = str(exc)
             print(f"[!] Fehler bei Ad #{it.index}: {exc}", file=sys.stderr)
 
-    # Persist manifest and report
+    # Persist updated manifest and report
+    failed_count = sum(1 for it in plan if it.status != "ok")
+    result_summary["failed_count"] = failed_count
+    result_summary["items"] = [asdict(item) for item in plan]
+    if any(it.status == "abgebrochen: Budget" for it in plan):
+        result_summary["status"] = "abgebrochen: Budget"
     manifest_path = campaign_dir / "manifest.json"
     manifest_path.write_text(json.dumps(result_summary, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -185,6 +304,7 @@ def run_batch(
         f"- **Produkt:** {product}",
         f"- **Datum:** {timestamp}",
         f"- **Generierte Ads:** {num_ads}",
+        f"- **Fehlgeschlagene Ads:** {failed_count}",
         f"- **Kosten:** ~{total_estimated} Credits",
         "",
         "## Generierte Video-Assets",
@@ -198,7 +318,13 @@ def run_batch(
         report_lines.append("")
 
     report_path.write_text("\n".join(report_lines), encoding="utf-8")
-    print(f"[SUCCESS] Kampagne abgeschlossen. Manifest gespeichert unter: {manifest_path}")
+    if failed_count > 0:
+        print(
+            f"[TEILWEISE FEHLGESCHLAGEN] {failed_count} von {num_ads} Ads fehlgeschlagen. "
+            f"Manifest gespeichert unter: {manifest_path}"
+        )
+    else:
+        print(f"[SUCCESS] Kampagne abgeschlossen. Manifest gespeichert unter: {manifest_path}")
     return result_summary
 
 
@@ -230,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     try:
-        run_batch(
+        summary = run_batch(
             product=args.product,
             campaign=args.campaign,
             num_ads=args.num_ads,
@@ -238,6 +364,8 @@ def main() -> int:
             max_credits=args.max_credits,
             confirm=args.confirm,
         )
+        if summary.get("failed_count", 0) > 0:
+            return 2
         return 0
     except Exception as err:
         print(f"Batch Ad Generator: ERROR — {err}", file=sys.stderr)

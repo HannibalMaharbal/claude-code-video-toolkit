@@ -86,3 +86,51 @@ def test_generate_remotion_social_props(tmp_path: Path):
     assert data["safe_zone"]["top"] == 150
     assert data["safe_zone"]["bottom"] == 280
     assert len(data["chunks"]) >= 1
+
+
+def test_word_captions_logic_pauses_and_end_window() -> None:
+    tsx_path = Path("templates/b2b-reel-remotion/src/components/WordCaptions.tsx")
+    assert tsx_path.is_file()
+    content = tsx_path.read_text(encoding="utf-8")
+
+    # 1. Pure function getActiveCaptionWindow must be exported
+    assert "export function getActiveCaptionWindow" in content
+
+    # 2. In pauses and after the last word, it must not jump unconditionally to index 0
+    assert "const activeIdx = currentIndex !== -1 ? currentIndex : 0;" not in content
+
+    # 3. After last word ends, it must return null (ausblenden)
+    assert "timeMs > captions[captions.length - 1].endMs" in content
+
+    # 4. In pause between words, it must find the last spoken word
+    assert "lastSpokenIdx" in content
+
+
+def test_b2b_reel_cta_duration_scales_with_fps() -> None:
+    tsx_path = Path("templates/b2b-reel-remotion/src/B2BReel.tsx")
+    assert tsx_path.is_file()
+    content = tsx_path.read_text(encoding="utf-8")
+
+    # CTA duration must scale with fps (3.5 * fps)
+    assert "Math.round(3.5 * fps)" in content
+    assert "ctaStartFrame = durationInFrames - 100" not in content
+    assert "durationInFrames={100}" not in content
+
+
+def test_sample_data_json_uwg_compliance_and_placeholders() -> None:
+    import re
+    sample_file = Path("templates/b2b-reel-remotion/sample-data.json")
+    assert sample_file.is_file()
+    content = sample_file.read_text(encoding="utf-8")
+    data = json.loads(content)
+
+    assert "_hinweis" in data
+    assert "BEISPIELDATEN" in data["_hinweis"]
+
+    # No concrete digits followed by %
+    digits_with_pct = re.findall(r"\d+\s*%", content)
+    assert not digits_with_pct, f"sample-data.json contains unverified percentages: {digits_with_pct}"
+
+    assert "[XX" in content
+
+

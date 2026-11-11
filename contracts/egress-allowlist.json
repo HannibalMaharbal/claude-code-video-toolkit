@@ -109,6 +109,16 @@
       "path": "tools/remotion_social.py",
       "pattern": "social_api",
       "reason": "Remotion Social-Plattformprofile und Seitenverhaeltnisse, keine Plattform-API-Ausfuehrung."
+    },
+    {
+      "path": "tools/carousel_generator.py",
+      "pattern": "social_api",
+      "reason": "nur Erwähnung/Formatname, kein Netzwerkversand"
+    },
+    {
+      "path": "tools/smart_autocrop.py",
+      "pattern": "social_api",
+      "reason": "nur Erwähnung/Formatname, kein Netzwerkversand"
     }
   ]
 }

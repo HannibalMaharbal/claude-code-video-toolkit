@@ -26,7 +26,7 @@ Das HANNIBAL AI OS verfolgt für Video- und Audioproduktion eine strikte **Lokal
 | **TTS & Stimmen** | Gemini 3.8 Flash TTS | ✅ Aktiv | Broadcast Voiceover (`promote`, `narration`, `friendly`) |
 | **Audio-Mastering** | `tools/audio_mix.py` | ✅ Aktiv | Sidechain-Ducking & Lautheitsnormierung auf **-14.0 LUFS** |
 | **Programmatisches Video** | `@remotion/cli` (v4.0.526) | ✅ Aktiv | Dynamische Word-by-Word Social Captions & Overlays |
-| **Desktop-Post-Production** | `/Applications/DaVinci Resolve.app` | ✅ Aktiv | Finales Finishing- & Fairlight-Mastering-Gate |
+| **Desktop-Post-Production** | `/Applications/DaVinci Resolve.app` | ⏸️ Inaktiv (Resolve Free 21.1 ohne Scripting-API; aktiv sobald Studio vorhanden) | Finales Finishing- & Fairlight-Mastering-Gate |
 | **Social Video Editor** | `/Applications/CapCut.app` | ✅ Aktiv | Schnitt, B-Roll, Punch-in Zooms (via CapCut-Skill) |
 
 ---
